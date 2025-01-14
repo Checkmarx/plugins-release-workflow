@@ -1,0 +1,38 @@
+name: Test Notify Teams Workflow
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      product_name:
+        description: 'Name of the product'
+        required: true
+        default: 'JetBrains'
+      release_version:
+        description: 'Version of the release'
+        required: true
+        default: 'v2.2.3'
+      cli_release_version:
+        description: 'Version of the cli in release'
+        required: true
+        default: 'v2.3.9'
+      release_author:
+        description: 'Author of the release'
+        required: true
+        default: 'test-author'
+      release_url:
+        description: 'URL of the release'
+        required: true
+        default: 'https://github.com/Checkmarx/ast-jetbrains-plugin/releases/tag/2.2.3'
+
+jobs:
+  test-notify:
+    uses: ./.github/workflows/release-notify.yml
+    with:
+      product_name: ${{ github.event.inputs.product_name }}
+      release_version: ${{ github.event.inputs.release_version }}
+      cli_release_version: ${{ github.event.inputs.cli_release_version }}
+      release_author: ${{ github.event.inputs.release_author }}
+      release_url: ${{ github.event.inputs.release_url }}
