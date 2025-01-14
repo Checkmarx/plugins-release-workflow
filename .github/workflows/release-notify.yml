@@ -85,7 +85,7 @@ jobs:
       - name: Send notification to Teams
         uses: Skitionek/notify-microsoft-teams@v1.0.8
         with:
-          webhook_url: https://checkmarx.webhook.office.com/webhookb2/5f811a29-905e-413f-bba5-231695e0d7fe@6677be72-cda1-47e8-ae4a-320b4692c7d7/IncomingWebhook/853350f9e4464a6b8fd322267efb88b0/0579dadb-7831-4e0e-8639-95fa06390117/V2TQWXTTo3Ul7lb9WZsSJQrCVAQgkCFURVVVHHvbUbUi81
+          webhook_url: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
           raw: >
             {
               "type": "message",
