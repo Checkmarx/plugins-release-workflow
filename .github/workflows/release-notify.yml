@@ -134,9 +134,16 @@ jobs:
 #            }
 
 
-      - name: Create JIRA Release
-        uses: GeoWerkstatt/create-jira-release@v1
+      - name: Send payload to JIRA Automation Webhook
+        uses: satak/webrequest-action@master
         with:
-          jira-project-key: 'AST-bla'
-          jira-automation-webhook: https://automation.atlassian.com/pro/hooks/ace803f85e7047b1b67bff69e8addf9864b07cee
-          build-version: 0.2.3-aa
+          url: https://automation.atlassian.com/pro/hooks/ace803f85e7047b1b67bff69e8addf9864b07cee
+          method: POST
+          payload: |
+            {
+              "data": {
+                "version": "HADAS-TEST",
+                "startDate": "2025-01-20",
+                "date": "2025-02-20"
+              }
+            }
