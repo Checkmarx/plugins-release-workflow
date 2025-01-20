@@ -41,4 +41,5 @@ jobs:
       release_author: ${{ github.event.inputs.release_author }}
       release_url: ${{ github.event.inputs.release_url }}
       jira_product_name: ${{ github.event.inputs.jira_product_name }}
+    secrets: inherit
 
