@@ -18,6 +18,9 @@ on:
       release_url:
         required: true
         type: string
+      jira_product_name:
+        required: true
+        type: string
 
 jobs:
   notify-teams:
@@ -134,16 +137,20 @@ jobs:
 #            }
 
 
+      - name: Get Current Date
+        id: current-date
+        run: echo "date=$(date +%Y-%m-%d)" >> $GITHUB_ENV
+
       - name: Send payload to JIRA Automation Webhook
         uses: satak/webrequest-action@master
         with:
-          url: https://automation.atlassian.com/pro/hooks/ace803f85e7047b1b67bff69e8addf9864b07cee
+          url: ${{ secrets.JIRA_RELEASE_WEBHOOK_URL }}
           method: POST
           payload: |
             {
               "data": {
-                "version": "Daniel-TEST",
-                "startDate": "2025-02-20",
-                "date": "2025-02-20"
+                "version": "${{ inputs.jira_product_name }}",
+                "startDate": "${{ env.date }}",
+                "date": "${{ env.date }}"
               }
             }
