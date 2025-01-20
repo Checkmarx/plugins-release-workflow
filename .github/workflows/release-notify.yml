@@ -149,7 +149,7 @@ jobs:
           payload: |
             {
               "data": {
-                "version": "${{ inputs.jira_product_name }}",
+                "version": "${{ inputs.jira_product_name }}_${{ inputs.release_version }}",
                 "startDate": "${{ env.date }}",
                 "date": "${{ env.date }}"
               }
