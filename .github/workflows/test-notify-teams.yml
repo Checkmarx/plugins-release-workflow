@@ -26,6 +26,10 @@ on:
         description: 'URL of the release'
         required: true
         default: 'https://github.com/Checkmarx/ast-jetbrains-plugin/releases/tag/2.2.3'
+      jira_product_name:
+        description: 'JIRA Release Name'
+        required: true
+        type: string
 
 jobs:
   test-notify:
@@ -36,3 +40,6 @@ jobs:
       cli_release_version: ${{ github.event.inputs.cli_release_version }}
       release_author: ${{ github.event.inputs.release_author }}
       release_url: ${{ github.event.inputs.release_url }}
+      jira_product_name: ${{ github.event.inputs.jira_product_name }}
+    secrets: inherit
+
