@@ -1,0 +1,30 @@
+name: Code Review with OpenAI
+
+on:
+  workflow_call:
+    inputs:
+      open_ai_model:
+        description: 'OpenAi Model'
+        required: false
+        default: 'gpt-4-1106-preview'
+        type: string
+      exclude_pattern:
+        description: 'Files Pattern To Exclude'
+        required: false
+        default: ''
+        type: string
+
+permissions: write-all
+jobs:
+  code_review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - name: Code Review
+        uses: aidar-freeed/ai-codereviewer@a9a064dfa1db8c83f40ef63f6e247fa09c935ed6 #main-22.1.25
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_API_MODEL: ${{ inputs.open_ai_model }}
+          exclude: ${{ inputs.exclude_pattern }}
