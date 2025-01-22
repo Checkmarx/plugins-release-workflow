@@ -5,7 +5,7 @@ on:
     inputs:
       open_ai_model:
         description: 'OpenAi Model'
-        required: true
+        required: false
         default: 'gpt-4-1106-preview'
         type: string
       exclude_pattern:
