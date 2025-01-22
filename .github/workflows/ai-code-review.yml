@@ -26,5 +26,5 @@ jobs:
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_API_MODEL: ${{ github.event.inputs.open_ai_model }}
-          exclude: ${{ github.event.inputs.exclude_pattern }}
+          OPENAI_API_MODEL: ${{ inputs.open_ai_model }}
+          exclude: ${{ inputs.exclude_pattern }}
