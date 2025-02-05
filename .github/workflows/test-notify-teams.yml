@@ -30,6 +30,7 @@ on:
         description: 'JIRA Release Name'
         required: true
         type: string
+        default: JETBRAINS
 
 jobs:
   test-notify:

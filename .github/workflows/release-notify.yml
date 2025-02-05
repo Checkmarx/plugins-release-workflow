@@ -87,23 +87,28 @@ jobs:
       - name: Extract Jira Ticket IDs
         id: extract_jira_tickets
         run: |
+          # Extract all AST-XXX patterns
           jira_tickets=$(echo "${{ steps.fetch_release_notes.outputs.release_notes }}" | grep -oE 'AST-[0-9]+' | sort -u)
-          
-          echo "Jira Tickets:"
-          
+
+          echo "Filtered Jira Tickets:"
+
+          valid_tickets=""
           for ticket in $jira_tickets; do
-            echo "$ticket"
+            if ! [[ $ticket =~ ^AST-0{3,}$ ]]; then
+              echo "$ticket"
+              valid_tickets+="$ticket"$'\n'
+            fi
           done
-          
+
           # Format Jira tickets as a comma-separated list
-          formatted_jira_tickets=$(echo "$jira_tickets" | tr '\n' ', ' | sed 's/, $//')
-          
+          formatted_jira_tickets=$(echo "$valid_tickets" | tr '\n' ', ' | sed 's/, $//')
+
           echo "Formatted Jira Tickets: $formatted_jira_tickets"
-          
+
           echo "formatted_jira_tickets=$formatted_jira_tickets" >> $GITHUB_OUTPUT
       
 
-#      - name: Send notification to Teams
+      #      - name: Send notification to Teams
 #        uses: Skitionek/notify-microsoft-teams@v1.0.8
 #        with:
 #          webhook_url: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
