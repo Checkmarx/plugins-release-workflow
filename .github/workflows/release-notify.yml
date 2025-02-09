@@ -164,6 +164,13 @@ jobs:
         id: current-date
         run: echo "date=$(date +%Y-%m-%d)" >> $GITHUB_ENV
 
+      - name: Generate Release Version
+        id: generate_release_version
+        run: |
+          release_version="${{ inputs.jira_product_name }}_${{ inputs.release_version }}"
+          echo "Generated Release Version: $release_version"
+          echo "release_version=$release_version" >> $GITHUB_OUTPUT
+
       - name: Create New JIRA Release
         uses: satak/webrequest-action@master
         with:
@@ -172,7 +179,7 @@ jobs:
           payload: |
             {
               "data": {
-                "version": "${{ inputs.jira_product_name }}_${{ inputs.release_version }}",
+                "version": "${{ steps.generate_release_version.outputs.release_version }}",
                 "startDate": "${{ env.date }}",
                 "date": "${{ env.date }}"
               }
@@ -188,6 +195,6 @@ jobs:
             {
               "issues": ${{ steps.extract_jira_tickets.outputs.formatted_jira_tickets }},
               "data": {
-                "releaseVersion": "${{ inputs.jira_product_name }}_${{ inputs.release_version }}"
+                "releaseVersion": "${{ steps.generate_release_version.outputs.release_version }}"
               }
             }
