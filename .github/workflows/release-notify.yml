@@ -181,7 +181,7 @@ jobs:
       - name: Send Jira Tickets to Webhook
         uses: satak/webrequest-action@master
         with:
-          url: ${{ secrets.JIRA_TICKETS_WEBHOOK_URL }}
+          url: https://api-private.atlassian.com/automation/webhooks/jira/a/faac3021-3997-42a0-9ae2-7054687be94c/0194b6f6-40f4-78ce-8d4b-5d165fb88ee7
           method: POST
           payload: |
             {
