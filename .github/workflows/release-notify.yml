@@ -181,16 +181,13 @@ jobs:
       - name: Send Jira Tickets to Webhook
         uses: satak/webrequest-action@master
         with:
-          url: https://api-private.atlassian.com/automation/webhooks/jira/a/faac3021-3997-42a0-9ae2-7054687be94c/0194b6f6-40f4-78ce-8d4b-5d165fb88ee7
-          method: POST
+          url: ${{ secrets.JIRA_TICKETS_WEBHOOK_URL }}
           headers: '{"X-Automation-Webhook-Token": "${{ secrets.JIRA_AUTOMATION_WEBHOOK_TOKEN }}"}'
+          method: POST
           payload: |
             {
-                "issues": [
-                  "AST-73515",
-                  "AST-75821"
-                ],
-                "data": {
-                  "releaseVersion": "JETBRAINS_v2.2.3"
-                }
+              "issues": ${{ steps.extract_jira_tickets.outputs.formatted_jira_tickets }},
+              "data": {
+                "releaseVersion": "${{ inputs.jira_product_name }}_${{ inputs.release_version }}"
+              }
             }
