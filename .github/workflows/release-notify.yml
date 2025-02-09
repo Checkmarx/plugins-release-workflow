@@ -185,8 +185,10 @@ jobs:
           method: POST
           payload: |
             {
-              "issues": ${{ steps.extract_jira_tickets.outputs.formatted_jira_tickets }},
               "data": {
-                "releaseVersion": "${{ inputs.jira_product_name }}_${{ inputs.release_version }}"
+                "issues": ${{ steps.extract_jira_tickets.outputs.formatted_jira_tickets }},
+                "data": {
+                  "releaseVersion": "${{ inputs.jira_product_name }}_${{ inputs.release_version }}"
+                }
               }
             }
