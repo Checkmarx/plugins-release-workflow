@@ -178,14 +178,14 @@ jobs:
               }
             }
 
-      - name: Tag JIRA Tickets With New Release
+      - name: Send Jira Tickets to Webhook
         uses: satak/webrequest-action@master
         with:
           url: ${{ secrets.JIRA_TICKETS_WEBHOOK_URL }}
           method: POST
           payload: |
             {
-              "issues": [${{ steps.extract_jira_tickets.outputs.formatted_jira_tickets }}],
+              "issues": ${{ steps.extract_jira_tickets.outputs.formatted_jira_tickets }},
               "data": {
                 "releaseVersion": "${{ inputs.jira_product_name }}_${{ inputs.release_version }}"
               }
