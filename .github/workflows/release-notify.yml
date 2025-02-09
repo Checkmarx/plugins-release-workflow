@@ -185,8 +185,11 @@ jobs:
           method: POST
           payload: |
             {
-              "issues": ${{ steps.extract_jira_tickets.outputs.formatted_jira_tickets }},
-              "data": {
-                "releaseVersion": "${{ inputs.jira_product_name }}_${{ inputs.release_version }}"
-              }
+                "issues": [
+                  "AST-73515",
+                  "AST-75821"
+                ],
+                "data": {
+                  "releaseVersion": "JETBRAINS_v2.2.3"
+                }
             }
