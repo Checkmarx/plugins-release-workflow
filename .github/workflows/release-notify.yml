@@ -89,22 +89,22 @@ jobs:
         run: |
           # Extract all AST-XXX patterns
           jira_tickets=$(echo "${{ steps.fetch_release_notes.outputs.release_notes }}" | grep -oE 'AST-[0-9]+' | sort -u)
-
+          
           echo "Filtered Jira Tickets:"
-
-          valid_tickets=""
+          
+          valid_tickets=()
           for ticket in $jira_tickets; do
             if ! [[ $ticket =~ ^AST-0{3,}$ ]]; then
               echo "$ticket"
-              valid_tickets+="$ticket"$'\n'
+              valid_tickets+=("\"$ticket\"")
             fi
           done
-
-          # Format Jira tickets as a comma-separated list
-          formatted_jira_tickets=$(echo "$valid_tickets" | tr '\n' ', ' | sed 's/, $//')
-
+          
+          # Format Jira tickets as a JSON array
+          formatted_jira_tickets=$(IFS=,; echo "[${valid_tickets[*]}]")
+          
           echo "Formatted Jira Tickets: $formatted_jira_tickets"
-
+          
           echo "formatted_jira_tickets=$formatted_jira_tickets" >> $GITHUB_OUTPUT
       
 
@@ -164,16 +164,29 @@ jobs:
         id: current-date
         run: echo "date=$(date +%Y-%m-%d)" >> $GITHUB_ENV
 
-#      - name: Send payload to JIRA Automation Webhook
-#        uses: satak/webrequest-action@master
-#        with:
-#          url: ${{ secrets.JIRA_RELEASE_WEBHOOK_URL }}
-#          method: POST
-#          payload: |
-#            {
-#              "data": {
-#                "version": "${{ inputs.jira_product_name }}_${{ inputs.release_version }}",
-#                "startDate": "${{ env.date }}",
-#                "date": "${{ env.date }}"
-#              }
-#            }
+      - name: Create New JIRA Release
+        uses: satak/webrequest-action@master
+        with:
+          url: ${{ secrets.JIRA_RELEASE_WEBHOOK_URL }}
+          method: POST
+          payload: |
+            {
+              "data": {
+                "version": "${{ inputs.jira_product_name }}_${{ inputs.release_version }}",
+                "startDate": "${{ env.date }}",
+                "date": "${{ env.date }}"
+              }
+            }
+
+      - name: Tag JIRA Tickets With New Release
+        uses: satak/webrequest-action@master
+        with:
+          url: ${{ secrets.JIRA_TICKETS_WEBHOOK_URL }}
+          method: POST
+          payload: |
+            {
+              "issues": [${{ steps.extract_jira_tickets.outputs.formatted_jira_tickets }}],
+              "data": {
+                "releaseVersion": "${{ inputs.jira_product_name }}_${{ inputs.release_version }}"
+              }
+            }
