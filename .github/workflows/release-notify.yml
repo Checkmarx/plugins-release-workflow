@@ -1,4 +1,4 @@
-name: Notify Teams on Release
+name: Notify Teams and JIRA On New Release
 
 on:
   workflow_call:
@@ -84,6 +84,29 @@ jobs:
           echo "formatted_contributors=$formatted_contributors" >> $GITHUB_OUTPUT
           echo "escaped_contributors_links=escaped_contributors_links" >> $GITHUB_OUTPUT
               
+      - name: Extract Jira Ticket IDs
+        id: extract_jira_tickets
+        run: |
+          # Extract all AST-XXX patterns
+          jira_tickets=$(echo "${{ steps.fetch_release_notes.outputs.release_notes }}" | grep -oE 'AST-[0-9]+' | sort -u)
+          
+          echo "Filtered Jira Tickets:"
+          
+          valid_tickets=()
+          for ticket in $jira_tickets; do
+            if ! [[ $ticket =~ ^AST-0{3,}$ ]]; then
+              echo "$ticket"
+              valid_tickets+=("\"$ticket\"")
+            fi
+          done
+          
+          # Format Jira tickets as a JSON array
+          formatted_jira_tickets=$(IFS=,; echo "[${valid_tickets[*]}]")
+          
+          echo "Formatted Jira Tickets: $formatted_jira_tickets"
+          
+          echo "formatted_jira_tickets=$formatted_jira_tickets" >> $GITHUB_OUTPUT
+      
 
       - name: Send notification to Teams
         uses: Skitionek/notify-microsoft-teams@v1.0.8
@@ -141,7 +164,14 @@ jobs:
         id: current-date
         run: echo "date=$(date +%Y-%m-%d)" >> $GITHUB_ENV
 
-      - name: Send payload to JIRA Automation Webhook
+      - name: Generate Release Version
+        id: generate_jira_release_version
+        run: |
+          jira_release_version="${{ inputs.jira_product_name }}_${{ inputs.release_version }}"
+          echo "Generated Release Version: jira_release_version"
+          echo "jira_release_version=$jira_release_version" >> $GITHUB_OUTPUT
+
+      - name: Create New JIRA Release
         uses: satak/webrequest-action@master
         with:
           url: ${{ secrets.JIRA_RELEASE_WEBHOOK_URL }}
@@ -149,8 +179,22 @@ jobs:
           payload: |
             {
               "data": {
-                "version": "${{ inputs.jira_product_name }}_${{ inputs.release_version }}",
+                "version": "${{ steps.generate_jira_release_version.outputs.release_version }}",
                 "startDate": "${{ env.date }}",
                 "date": "${{ env.date }}"
+              }
+            }
+
+      - name: Send Jira Tickets to Webhook
+        uses: satak/webrequest-action@master
+        with:
+          url: ${{ secrets.JIRA_TICKETS_WEBHOOK_URL }}
+          headers: '{"X-Automation-Webhook-Token": "${{ secrets.JIRA_AUTOMATION_WEBHOOK_TOKEN }}"}'
+          method: POST
+          payload: |
+            {
+              "issues": ${{ steps.extract_jira_tickets.outputs.formatted_jira_tickets }},
+              "data": {
+                "releaseVersion": "${{ steps.generate_jira_release_version.outputs.release_version }}"
               }
             }
