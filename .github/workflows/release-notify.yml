@@ -168,7 +168,7 @@ jobs:
         id: generate_jira_release_version
         run: |
           jira_release_version="${{ inputs.jira_product_name }}_${{ inputs.release_version }}"
-          echo "Generated Release Version: jira_release_version"
+          echo "Generated Release Version: $jira_release_version"
           echo "jira_release_version=$jira_release_version" >> $GITHUB_OUTPUT
 
       - name: Create New JIRA Release
@@ -179,7 +179,7 @@ jobs:
           payload: |
             {
               "data": {
-                "version": "${{ steps.generate_jira_release_version.outputs.release_version }}",
+                "version": "${{ steps.generate_jira_release_version.outputs.jira_release_version }}",
                 "startDate": "${{ env.date }}",
                 "date": "${{ env.date }}"
               }
@@ -195,6 +195,6 @@ jobs:
             {
               "issues": ${{ steps.extract_jira_tickets.outputs.formatted_jira_tickets }},
               "data": {
-                "releaseVersion": "${{ steps.generate_jira_release_version.outputs.release_version }}"
+                "releaseVersion": "${{ steps.generate_jira_release_version.outputs.jira_release_version }}"
               }
             }
