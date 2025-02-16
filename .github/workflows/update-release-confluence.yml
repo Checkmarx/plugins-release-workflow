@@ -1,0 +1,45 @@
+name: Update Confluence Table
+
+on:
+  workflow_dispatch:
+    inputs:
+      product:
+        description: 'Product name'
+        required: true
+      version:
+        description: 'Product version'
+        required: true
+      status:
+        description: 'Pipeline status'
+        required: true
+      additional_info:
+        description: 'Additional information'
+        required: false
+
+jobs:
+  update-confluence:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4
+
+      - name: Update Confluence Page
+        env:
+          CONFLUENCE_API_USERNAME: ${{ secrets.CONFLUENCE_API_USERNAME }}
+          CONFLUENCE_API_TOKEN: ${{ secrets.CONFLUENCE_API_TOKEN }}
+        run: |
+          python update_confluence.py \
+            "${{ github.event.inputs.product }}" \
+            "${{ github.event.inputs.version }}" \
+            "${{ github.event.inputs.status }}" \
+            "${{ github.event.inputs.additional_info }}"
