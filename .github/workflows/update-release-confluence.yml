@@ -38,7 +38,7 @@ jobs:
           CONFLUENCE_API_USERNAME: ${{ secrets.CONFLUENCE_API_USERNAME }}
           CONFLUENCE_API_TOKEN: ${{ secrets.CONFLUENCE_API_TOKEN }}
         run: |
-          python update_confluence.py \
+          python ./.github/scripts/update_confluence.py \
             "${{ github.event.inputs.product }}" \
             "${{ github.event.inputs.version }}" \
             "${{ github.event.inputs.status }}" \
