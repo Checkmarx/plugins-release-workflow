@@ -63,17 +63,17 @@ jobs:
           **Repository:** ${{ inputs.repo }}
 
           **What Happened:**
-          $ISSUE_DESCRIPTION
+          ${{ env.ISSUE_DESCRIPTION }}
 
           **Version:**
-          $ISSUE_VERSION
-
+          ${{ env.ISSUE_VERSION }}
+          
           **Operating System & Version:**
-          $ISSUE_OS
+          ${{ env.ISSUE_OS }}
 
           **Relevant Logs:**
           \`\`\`
-          $ISSUE_LOGS
+          ${{ env.ISSUE_LOGS }}
           \`\`\`
 
           [View original issue](${{ inputs.html_url }})
