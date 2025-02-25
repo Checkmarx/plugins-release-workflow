@@ -48,8 +48,18 @@ jobs:
       - name: Format Jira Description
         id: format_description
         run: |
-          echo "FORMATTED_DESCRIPTION=**Issue Title:** ${{ inputs.title }}%0A%0A**Repository:** ${{ inputs.repo }}%0A%0A**Description:**%0A${{ inputs.body }}%0A%0A[View original issue](${{ inputs.html_url }})" >> $GITHUB_ENV
-      
+          cat <<EOF >> $GITHUB_ENV
+          FORMATTED_DESCRIPTION<<EOF
+          **Issue Title:** ${{ inputs.title }}
+          
+          **Repository:** ${{ inputs.repo }}
+          
+          **Description:**
+          ${{ inputs.body }}
+          
+          [View original issue](${{ inputs.html_url }})
+          EOF
+          EOF
 
       - name: Create Jira Issue for Bug
         if: env.is_bug == 'true'
