@@ -1,3 +1,6 @@
+# Centralized GitHub Action for Jira Notification (.github/workflows/jira_notify.yml)
+name: Notify Jira
+
 on:
   workflow_call:
     inputs:
@@ -22,7 +25,7 @@ jobs:
   notify_jira:
     runs-on: ubuntu-latest
     env:
-      JIRA_URL: "https://checkmarx.atlassian.net"
+      JIRA_URL: "https://checkmarx.atlassian.net/"
     steps:
       - name: Jira Login
         uses: atlassian/gajira-login@ca13f8850ea309cf44a6e4e0c49d9aa48ac3ca4c #v3
@@ -35,10 +38,16 @@ jobs:
         id: fields
         run: |
           if [[ "${{ inputs.title }}" == "[BUG]" ]]; then
-            echo "fields=${{ env.JIRA_FIELDS_BUG }}" >> $GITHUB_ENV
+            echo "JIRA_FIELDS=${{ secrets.JIRA_FIELDS_BUG }}" >> $GITHUB_ENV
+            echo "Selected Jira Fields: BUG Fields"
           else
-            echo "fields=${{ env.JIRA_FIELDS_OTHER }}" >> $GITHUB_ENV
+            echo "JIRA_FIELDS=${{ secrets.JIRA_FIELDS_OTHER }}" >> $GITHUB_ENV
+            echo "Selected Jira Fields: OTHER Fields"
           fi
+
+      - name: Debug Fields Output
+        run: |
+          echo "JIRA Fields Selected: $JIRA_FIELDS"
 
       - name: Jira Create issue
         id: create_jira_issue
@@ -46,9 +55,9 @@ jobs:
         with:
           project: AST
           issuetype: Task
-          summary: '${{inputs.repo}} ${{inputs.title}}'
-          description: ${{inputs.body}} see more at ${{inputs.html_url}}
-          fields: ${{ env.fields }}
+          summary: '${{ inputs.repo }} ${{ inputs.title }}'
+          description: '${{ inputs.body }} see more at ${{ inputs.html_url }}'
+          fields: "${{ env.JIRA_FIELDS }}"
 
       - name: Add comment to GitHub issue
         uses: actions/github-script@v4.0.2
@@ -60,9 +69,3 @@ jobs:
               repo: context.repo.repo,
               body: 'Internal Jira issue: [${{ steps.create_jira_issue.outputs.issue }}](${{ env.JIRA_URL }}/browse/${{ steps.create_jira_issue.outputs.issue }})'
             })
-
-      - name: Send a teams notification
-        uses: thechetantalwar/teams-notify@8a78811f5e8f58cdd204efebd79158006428c46b #v2
-        with:
-          teams_webhook_url: ${{ secrets.TEAMS_WEBHOOK_URI }}
-          message: "Github issue created ${{ github.repository }} - Link - ${{inputs.html_url}} - Jira Issue - ${{ env.JIRA_URL }}/browse/${{ steps.create_jira_issue.outputs.issue }}"
