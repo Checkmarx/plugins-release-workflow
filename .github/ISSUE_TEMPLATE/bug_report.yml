@@ -72,7 +72,6 @@ body:
       placeholder: Enter your OS and version
     validations:
       required: true
-    depends-on: os-version
   - type: textarea
     id: logs
     attributes:
