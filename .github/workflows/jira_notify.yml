@@ -22,7 +22,7 @@ jobs:
   notify_jira:
     runs-on: ubuntu-latest
     env:
-      JIRA_URL: "https://checkmarx.atlassian.net/"
+      JIRA_URL: "https://checkmarx.atlassian.net"
     steps:
       - name: Jira Login
         uses: atlassian/gajira-login@ca13f8850ea309cf44a6e4e0c49d9aa48ac3ca4c #v3

@@ -3,6 +3,7 @@ name: Bug report
 about: Create a report for a bug in the CLI
 title: "[BUG]"
 labels: bug
+issueType: Bug
 assignees: ''
 
 ---
