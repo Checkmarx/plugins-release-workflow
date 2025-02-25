@@ -45,6 +45,12 @@ jobs:
             echo "Selected Issue Type: OTHER"
           fi
 
+      - name: Format Jira Description
+        id: format_description
+        run: |
+          echo "FORMATTED_DESCRIPTION=**Issue Title:** ${{ inputs.title }}%0A%0A**Repository:** ${{ inputs.repo }}%0A%0A**Description:**%0A${{ inputs.body }}%0A%0A[View original issue](${{ inputs.html_url }})" >> $GITHUB_ENV
+      
+
       - name: Create Jira Issue for Bug
         if: env.is_bug == 'true'
         id: create_jira_bug
@@ -53,7 +59,7 @@ jobs:
           project: AST
           issuetype: Task
           summary: '${{ inputs.repo }} ${{ inputs.title }}'
-          description: '${{ inputs.body }} see more at ${{ inputs.html_url }}'
+          description: '${{ env.FORMATTED_DESCRIPTION }}'
           fields: ${{ secrets.JIRA_FIELDS_BUG }}
 
       - name: Create Jira Issue for Other
