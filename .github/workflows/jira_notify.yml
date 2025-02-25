@@ -37,6 +37,8 @@ jobs:
       - name: Extract Issue Fields
         id: extract_fields
         run: |
+          echo "Body: ${{ inputs.body }}"
+
           ISSUE_DESCRIPTION=$(echo "${{ inputs.body }}" | awk -v RS='' '/### What happened?/{getline; print}')
           ISSUE_VERSION=$(echo "${{ inputs.body }}" | awk -v RS='' '/### Version/{getline; print}')
           ISSUE_OS=$(echo "${{ inputs.body }}" | awk -v RS='' '/### Operating System & Version/{getline; print}')
@@ -56,29 +58,16 @@ jobs:
       - name: Format Jira Description
         id: format_description
         run: |
-          cat <<EOF >> $GITHUB_ENV
-          FORMATTED_DESCRIPTION<<EOF
-          **Issue Title:** ${{ inputs.title }}
+          FORMATTED_DESCRIPTION="**Issue Title:** ${{ inputs.title }}\n\n"
+          FORMATTED_DESCRIPTION+="**Repository:** ${{ inputs.repo }}\n\n"
+          FORMATTED_DESCRIPTION+="**What Happened:**\n$ISSUE_DESCRIPTION\n\n"
+          FORMATTED_DESCRIPTION+="**Version:**\n$ISSUE_VERSION\n\n"
+          FORMATTED_DESCRIPTION+="**Operating System & Version:**\n$ISSUE_OS\n\n"
+          FORMATTED_DESCRIPTION+="**Relevant Logs:**\n\n\`
+          FORMATTED_DESCRIPTION+="$ISSUE_LOGS\n\`
+          FORMATTED_DESCRIPTION+="\n\n[View original issue](${{ inputs.html_url }})"
 
-          **Repository:** ${{ inputs.repo }}
-
-          **What Happened:**
-          ${{ env.ISSUE_DESCRIPTION }}
-
-          **Version:**
-          ${{ env.ISSUE_VERSION }}
-          
-          **Operating System & Version:**
-          ${{ env.ISSUE_OS }}
-
-          **Relevant Logs:**
-          \`\`\`
-          ${{ env.ISSUE_LOGS }}
-          \`\`\`
-
-          [View original issue](${{ inputs.html_url }})
-          EOF
-          EOF
+          echo "FORMATTED_DESCRIPTION=$FORMATTED_DESCRIPTION" >> $GITHUB_ENV
 
       - name: Create Jira Issue
         id: create_jira_issue
