@@ -1,3 +1,4 @@
+# Centralized GitHub Issue Templates for Bug Reports (.github/ISSUE_TEMPLATE/bug_report.yml)
 name: Bug Report
 description: File a bug report.
 title: "[Bug]: "
@@ -39,15 +40,16 @@ body:
     validations:
       required: true
   - type: dropdown
-    id: browsers
+    id: os
     attributes:
-      label: What browsers are you seeing the problem on?
-      multiple: true
+      label: Operating System
+      description: What OS are you experiencing the issue on?
       options:
-        - Firefox
-        - Chrome
-        - Safari
-        - Microsoft Edge
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
   - type: textarea
     id: logs
     attributes:
