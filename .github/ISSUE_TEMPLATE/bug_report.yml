@@ -28,26 +28,40 @@ body:
       value: "A bug happened!"
     validations:
       required: true
-  - type: dropdown
+  - type: input
     id: version
     attributes:
       label: Version
       description: What version of our software are you running?
-      options:
-        - 1.0.2 (Default)
-        - 1.0.3 (Edge)
-      default: 0
+      placeholder: Enter the version number
     validations:
       required: true
   - type: dropdown
-    id: os
+    id: os-version
     attributes:
-      label: Operating System
-      description: What OS are you experiencing the issue on?
+      label: Operating System & Version
+      description: Select your OS and version
       options:
-        - Windows
-        - macOS
-        - Linux
+        - Windows 7
+        - Windows 8
+        - Windows 10
+        - Windows 11
+        - macOS Big Sur
+        - macOS Monterey
+        - macOS Ventura
+        - macOS Sonoma
+        - Ubuntu 18.04
+        - Ubuntu 20.04
+        - Ubuntu 22.04
+        - Debian 10
+        - Debian 11
+        - Fedora 36
+        - Fedora 37
+        - Arch Linux (Latest)
+        - Red Hat Enterprise Linux 8
+        - Red Hat Enterprise Linux 9
+        - openSUSE Leap 15
+        - Other
     validations:
       required: true
   - type: textarea
