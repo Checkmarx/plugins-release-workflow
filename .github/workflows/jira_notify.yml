@@ -34,38 +34,47 @@ jobs:
           JIRA_USER_EMAIL: ${{ secrets.AST_JIRA_USER_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.AST_JIRA_API_TOKEN }}
 
-      - name: Determine Fields
-        id: fields
+      - name: Determine Issue Type
+        id: issue_type
         run: |
           if [[ "${{ inputs.title }}" == *"[BUG]"* ]]; then
-            echo "JIRA_FIELDS=${{ secrets.JIRA_FIELDS_BUG }}" >> $GITHUB_ENV
-            echo "Selected Jira Fields: BUG Fields - $JIRA_FIELDS"
+            echo "is_bug=true" >> $GITHUB_ENV
+            echo "Selected Issue Type: BUG"
           else
-            echo "JIRA_FIELDS=${{ secrets.JIRA_FIELDS_OTHER }}" >> $GITHUB_ENV
-            echo "Selected Jira Fields: OTHER Fields - $JIRA_FIELDS"
+            echo "is_bug=false" >> $GITHUB_ENV
+            echo "Selected Issue Type: OTHER"
           fi
 
-      - name: Debug Fields Output
-        run: |
-          echo "JIRA Fields Selected: $JIRA_FIELDS"
-
-      - name: Jira Create issue
-        id: create_jira_issue
+      - name: Create Jira Issue for Bug
+        if: env.is_bug == 'true'
+        id: create_jira_bug
         uses: atlassian/gajira-create@1ff0b6bd115a780592b47bfbb63fc4629132e6ec #v3
         with:
           project: AST
           issuetype: Task
           summary: '${{ inputs.repo }} ${{ inputs.title }}'
           description: '${{ inputs.body }} see more at ${{ inputs.html_url }}'
-          fields: "${{ env.JIRA_FIELDS }}"
+          fields: ${{ secrets.JIRA_FIELDS_BUG }}
+
+      - name: Create Jira Issue for Other
+        if: env.is_bug == 'false'
+        id: create_jira_other
+        uses: atlassian/gajira-create@1ff0b6bd115a780592b47bfbb63fc4629132e6ec #v3
+        with:
+          project: AST
+          issuetype: Task
+          summary: '${{ inputs.repo }} ${{ inputs.title }}'
+          description: '${{ inputs.body }} see more at ${{ inputs.html_url }}'
+          fields: ${{ secrets.JIRA_FIELDS_OTHER }}
 
       - name: Add comment to GitHub issue
         uses: actions/github-script@v4.0.2
         with:
           script: |
+            issue_id = process.env.is_bug == 'true' ? "${{ steps.create_jira_bug.outputs.issue }}" : "${{ steps.create_jira_other.outputs.issue }}"
             github.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: 'Internal Jira issue: [${{ steps.create_jira_issue.outputs.issue }}](${{ env.JIRA_URL }}/browse/${{ steps.create_jira_issue.outputs.issue }})'
+              body: 'Internal Jira issue: [' + issue_id + '](${{ env.JIRA_URL }}/browse/' + issue_id + ')'
             })
