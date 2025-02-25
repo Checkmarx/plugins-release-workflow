@@ -37,7 +37,7 @@ jobs:
       - name: Determine Fields
         id: fields
         run: |
-          if [[ "${{ inputs.title }}" == "[BUG]" ]]; then
+          if [[ "${{ inputs.title }}" == *"[BUG]"* ]]; then
             echo "JIRA_FIELDS=${{ secrets.JIRA_FIELDS_BUG }}" >> $GITHUB_ENV
             echo "Selected Jira Fields: BUG Fields - $JIRA_FIELDS"
           else
