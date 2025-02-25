@@ -67,13 +67,13 @@ jobs:
       - name: Format Jira Description
         id: format_description
         run: |
-          FORMATTED_DESCRIPTION="*Issue Title:* ${{ inputs.title }}\n"
-          FORMATTED_DESCRIPTION+=" *Repository:* ${{ inputs.repo }}\n"
-          FORMATTED_DESCRIPTION+=" *What Happened:* $ISSUE_DESCRIPTION\n"
+          FORMATTED_DESCRIPTION="*Issue Title:* ${{ inputs.title }} \\ \\"
+          FORMATTED_DESCRIPTION+=" *Repository:* ${{ inputs.repo }} \\ \\"
+          FORMATTED_DESCRIPTION+=" *What Happened:* $ISSUE_DESCRIPTION \\ \\"
           FORMATTED_DESCRIPTION+=" *Version:* $ISSUE_VERSION\n"
-          FORMATTED_DESCRIPTION+=" *Operating System & Version:* $ISSUE_OS\n"
+          FORMATTED_DESCRIPTION+=" *Operating System & Version:* $ISSUE_OS \\ \\"
           if [[ -n "$ISSUE_LOGS" ]]; then
-            FORMATTED_DESCRIPTION+=" *Relevant Logs:*\n{code}$ISSUE_LOGS{code}\n"
+            FORMATTED_DESCRIPTION+=" *Relevant Logs:*\n{code}$ISSUE_LOGS{code} \\ \\"
           fi
           FORMATTED_DESCRIPTION+=" [View original issue|${{ inputs.html_url }}]"
           
