@@ -67,29 +67,17 @@ jobs:
       - name: Format Jira Description
         id: format_description
         run: |
-          FORMATTED_DESCRIPTION="*Issue Title:* ${{ inputs.title }}\\
-          \\
-          *Repository:* ${{ inputs.repo }}\\
-          \\
-          *What Happened:*\\
-          $ISSUE_DESCRIPTION\\
-          \\
-          *Version:*\\
-          $ISSUE_VERSION\\
-          \\
-          *Operating System & Version:*\\
-          $ISSUE_OS"
+          FORMATTED_DESCRIPTION="*Issue Title:* ${{ inputs.title }}\\"
+          FORMATTED_DESCRIPTION+="*Repository:* ${{ inputs.repo }}\\"
+          FORMATTED_DESCRIPTION+="*What Happened:* $ISSUE_DESCRIPTION\\"
+          FORMATTED_DESCRIPTION+="*Version:* $ISSUE_VERSION\\"
+          FORMATTED_DESCRIPTION+="*Operating System & Version:* $ISSUE_OS\\"
           if [[ -n "$ISSUE_LOGS" ]]; then
-          FORMATTED_DESCRIPTION+="\\
-          \\
-          *Relevant Logs:*\\
-          { code }$ISSUE_LOGS{code}"
+            FORMATTED_DESCRIPTION+="*Relevant Logs:*\\{code}$ISSUE_LOGS{code}\\"
           fi
-          FORMATTED_DESCRIPTION+="\\
-          \\
-          [View original issue|${{ inputs.html_url }}]"
+          FORMATTED_DESCRIPTION+="[View original issue|${{ inputs.html_url }}]"
+          
           echo "FORMATTED_DESCRIPTION=$FORMATTED_DESCRIPTION" >> $GITHUB_ENV
-      
 
       - name: Create Jira Issue for Bug
         if: env.IS_BUG == 'true'
