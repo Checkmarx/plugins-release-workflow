@@ -26,7 +26,7 @@ jobs:
         env:
           GH_ORG: 'CheckmarxDev'
           GH_REPO: 'ast-cli-java-wrapper'
-          CLI_VERSION: ${{ inputs.cli_version }}
+          CLI_VERSION: ''
           GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
         run: python ./.github/scripts/dispatch_event.py
 
@@ -46,6 +46,26 @@ jobs:
         env:
           GH_ORG: 'Checkmarx'
           GH_REPO: 'ast-github-action'
+          CLI_VERSION: ${{ inputs.cli_version }}
+          GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
+        run: python ./.github/scripts/dispatch_event.py
+
+  update_javescript_wrapper_action:
+    name: Update Javascript Wrapper Action
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v3
+
+      - name: Set Up Environment
+        uses: ./.github/actions/setup
+        with:
+          python-version: '3.x'
+
+      - name: Trigger Update Event On Javascript Wrapper Repo
+        env:
+          GH_ORG: 'CheckmarxDev'
+          GH_REPO: 'ast-cli-javascript-wrapper'
           CLI_VERSION: ${{ inputs.cli_version }}
           GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
         run: python ./.github/scripts/dispatch_event.py

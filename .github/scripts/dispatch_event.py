@@ -28,6 +28,7 @@ def trigger_github_workflow(org, repo, cli_version, github_token):
     else:
         print(f'Error: Failed to dispatch event to {org}/{repo}. Status code: {response.status_code}')
         print(f'Response: {response.json()}')
+        sys.exit(1)
 
 if __name__ == "__main__":
     GH_ORG = os.getenv('GH_ORG')
