@@ -27,7 +27,7 @@ jobs:
           REPO: 'https://github.com/CheckmarxDev/ast-cli-java-wrapper'
           CLI_VERSION: ${{ inputs.cli_version }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python dispatch_event.py
+        run: python ./.github/scripts/dispatch_event.py
 
   update_github_action:
     name: Update Github Action
@@ -46,5 +46,5 @@ jobs:
           REPO: 'https://github.com/Checkmarx/ast-github-action'
           CLI_VERSION: ${{ inputs.cli_version }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python dispatch_event.py
+        run: python ./.github/scripts/dispatch_event.py
 
