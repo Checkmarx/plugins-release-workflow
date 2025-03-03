@@ -6,8 +6,8 @@ def main():
     cli_version = os.getenv('CLI_VERSION')
     github_token = os.getenv('GITHUB_TOKEN')
 
-    if not repo or not cli_version or not github_token:
-        raise ValueError("REPO, CLI_VERSION, and GITHUB_TOKEN environment variables must be set.")
+    if not repo or not github_token:
+        raise ValueError("REPO and GITHUB_TOKEN environment variables must be set.")
 
     api_url = f"https://api.github.com/repos/{repo}/dispatches"
     headers = {
