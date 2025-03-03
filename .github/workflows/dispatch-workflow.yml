@@ -14,6 +14,9 @@ jobs:
     name: Update Java Wrapper
     runs-on: ubuntu-latest
     steps:
+      - name: Check out the repository
+        uses: actions/checkout@v3
+
       - name: Set Up Environment
         uses: ./.github/actions/setup
         with:
@@ -30,6 +33,9 @@ jobs:
     name: Update Github Action
     runs-on: ubuntu-latest
     steps:
+      - name: Check out the repository
+        uses: actions/checkout@v3
+
       - name: Set Up Environment
         uses: ./.github/actions/setup
         with:
