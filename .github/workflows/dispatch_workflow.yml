@@ -1,0 +1,44 @@
+name: Dispatch CLI Version Update
+
+on:
+  workflow_call:
+    inputs:
+      cli_version:
+        description: 'CLI version to update (no input will take latest)'
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  update_java_wrapper:
+    name: Update Java Wrapper
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set Up Environment
+        uses: ./.github/actions/setup
+        with:
+          python-version: '3.x'
+
+      - name: Trigger Update Event On Java Wrapper Repo
+        env:
+          REPO: 'https://github.com/CheckmarxDev/ast-cli-java-wrapper'
+          CLI_VERSION: ${{ inputs.cli_version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python dispatch_event.py
+
+  update_github_action:
+    name: Update Github Action
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set Up Environment
+        uses: ./.github/actions/setup
+        with:
+          python-version: '3.x'
+
+      - name: Trigger Update Event On Github Action Repo
+        env:
+          REPO: 'https://github.com/Checkmarx/ast-github-action'
+          CLI_VERSION: ${{ inputs.cli_version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python dispatch_event.py
+
