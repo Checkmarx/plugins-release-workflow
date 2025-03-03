@@ -24,9 +24,10 @@ jobs:
 
       - name: Trigger Update Event On Java Wrapper Repo
         env:
-          REPO: 'https://github.com/CheckmarxDev/ast-cli-java-wrapper'
+          GH_ORG: 'CheckmarxDev',
+          GH_REPO: 'ast-cli-java-wrapper'
           CLI_VERSION: ${{ inputs.cli_version }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
         run: python ./.github/scripts/dispatch_event.py
 
   update_github_action:
@@ -43,8 +44,9 @@ jobs:
 
       - name: Trigger Update Event On Github Action Repo
         env:
-          REPO: 'https://github.com/Checkmarx/ast-github-action'
+          GH_ORG: 'Checkmarx',
+          GH_REPO: 'ast-github-action'
           CLI_VERSION: ${{ inputs.cli_version }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
         run: python ./.github/scripts/dispatch_event.py
 
