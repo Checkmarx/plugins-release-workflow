@@ -1,9 +1,6 @@
 name: Test Auto release dispatcher workflow
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       cli_version:
