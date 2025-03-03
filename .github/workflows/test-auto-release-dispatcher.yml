@@ -1,0 +1,20 @@
+name: Test Auto release dispatcher workflow
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      cli_version:
+        description: 'Version to release'
+        required: false
+        default: ''
+
+jobs:
+  test-notify:
+    uses: ./.github/workflows/dispatch-workflow.yml
+    with:
+      cli_version: ${{ github.event.inputs.cli_version }}
+    secrets: inherit
+
