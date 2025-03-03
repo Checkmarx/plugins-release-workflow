@@ -10,8 +10,9 @@ on:
         description: 'Product version'
         required: true
       status:
-        description: 'Pipeline status'
+        description: 'Pipeline status (healthy, warning, critical)'
         required: true
+        default: 'healthy'
       additional_info:
         description: 'Additional information'
         required: false
@@ -42,4 +43,4 @@ jobs:
             "${{ github.event.inputs.product }}" \
             "${{ github.event.inputs.version }}" \
             "${{ github.event.inputs.status }}" \
-            "${{ github.event.inputs.additional_info }}"
+            "${{ github.event.inputs.additional_info || '' }}"

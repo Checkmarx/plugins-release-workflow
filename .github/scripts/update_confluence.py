@@ -63,6 +63,19 @@ def main(product, version, status, additional_info):
                 cells[1].string = version
                 cells[2].string = status
                 cells[3].string = additional_info
+
+                # Map status to background color
+                status_color_map = {
+                    'healthy': '#57d9a3',  # Green
+                    'warning': '#ffc400',  # Orange
+                    'critical': '#ff8f73'  # Red
+                }
+                # Set the background color based on status
+                color = status_color_map.get(status.lower())
+                if color:
+                    cells[2]['data-highlight-colour'] = color
+                else:
+                    print(f'Unknown status: {status}. No color mapping applied.')
                 break
         else:
             print('Specified product not found in the table.')
@@ -77,6 +90,7 @@ def main(product, version, status, additional_info):
     # Step 3: Update the page with the new content
     update_page_content(new_content, version_number, title)
     print('Page updated successfully.')
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Update Confluence table row.')
