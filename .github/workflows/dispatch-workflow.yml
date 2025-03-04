@@ -162,7 +162,7 @@ jobs:
 ############################## JS Release #####################################
 
   update_visual_studio_code_action:
-    if: ${{ inputs.is_js_release == 'true' }}
+    if: ${{ inputs.is_js_release == true }}
     name: Update Visual Studio Code
     runs-on: ubuntu-latest
     steps:
