@@ -26,21 +26,9 @@ on:
         type: string
 
 jobs:
-  # Define a job to set up the environment
-  setup_environment:
-    name: Set Up Environment
-    runs-on: ubuntu-latest
-    outputs:
-      cli_version: ${{ steps.set_version.outputs.cli_version }}
-    steps:
-      - name: Set CLI Version
-        id: set_version
-        run: echo "::set-output name=cli_version::${{ github.event.inputs.cli_version }}"
-
   # Group CLI-related updates
   update_cli_consumers:
     name: Update CLI Consumers
-    needs: setup_environment
     runs-on: ubuntu-latest
     if: ${{ inputs.is_cli_release == true }}
     strategy:
@@ -56,15 +44,15 @@ jobs:
     steps:
       - name: Check out the repository
         uses: actions/checkout@v3
-      - name: Set Up Python Environment
-        uses: actions/setup-python@v3
+      - name: Set Up Custom Environment
+        uses: ./.github/actions/setup
         with:
           python-version: '3.x'
       - name: Trigger Update Event on ${{ matrix.repo.name }}
         env:
           GH_ORG: ${{ matrix.repo.org }}
           GH_REPO: ${{ matrix.repo.name }}
-          CLI_VERSION: ${{ needs.setup_environment.outputs.cli_version }}
+          CLI_VERSION: ${{ inputs.cli_version }}
           IS_CLI_RELEASE: 'true'
           GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
         run: python ./.github/scripts/dispatch_new_version_event.py
@@ -72,7 +60,6 @@ jobs:
   # Group JavaScript Wrapper-related updates
   update_js_wrapper_consumers:
     name: Update JavaScript Wrapper Consumers
-    needs: setup_environment
     runs-on: ubuntu-latest
     if: ${{ inputs.is_js_release == true }}
     strategy:
@@ -83,15 +70,15 @@ jobs:
     steps:
       - name: Check out the repository
         uses: actions/checkout@v3
-      - name: Set Up Python Environment
-        uses: actions/setup-python@v3
+      - name: Set Up Custom Environment
+        uses: ./.github/actions/setup
         with:
           python-version: '3.x'
       - name: Trigger Update Event on ${{ matrix.repo.name }}
         env:
           GH_ORG: ${{ matrix.repo.org }}
           GH_REPO: ${{ matrix.repo.name }}
-          CLI_VERSION: ${{ needs.setup_environment.outputs.cli_version }}
+          CLI_VERSION: ${{ inputs.cli_version }}
           IS_JS_RELEASE: 'true'
           GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
         run: python ./.github/scripts/dispatch_new_version_event.py
@@ -99,7 +86,6 @@ jobs:
   # Group JavaScript Runtime Wrapper-related updates
   update_js_runtime_wrapper_consumers:
     name: Update JavaScript Runtime Wrapper Consumers
-    needs: setup_environment
     runs-on: ubuntu-latest
     if: ${{ inputs.is_js_runtime_release == true }}
     strategy:
@@ -110,15 +96,15 @@ jobs:
     steps:
       - name: Check out the repository
         uses: actions/checkout@v3
-      - name: Set Up Python Environment
-        uses: actions/setup-python@v3
+      - name: Set Up Custom Environment
+        uses: ./.github/actions/setup
         with:
           python-version: '3.x'
       - name: Trigger Update Event on ${{ matrix.repo.name }}
         env:
           GH_ORG: ${{ matrix.repo.org }}
           GH_REPO: ${{ matrix.repo.name }}
-          CLI_VERSION: ${{ needs.setup_environment.outputs.cli_version }}
+          CLI_VERSION: ${{ inputs.cli_version }}
           IS_JS_RUNTIME_RELEASE: 'true'
           GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
         run: python ./.github/scripts/dispatch_new_version_event.py
@@ -126,7 +112,6 @@ jobs:
   # Group Java Wrapper-related updates
   update_java_wrapper_consumers:
     name: Update Java Wrapper Consumers
-    needs: setup_environment
     runs-on: ubuntu-latest
     if: ${{ inputs.is_java_release == true }}
     strategy:
@@ -139,15 +124,15 @@ jobs:
     steps:
       - name: Check out the repository
         uses: actions/checkout@v3
-      - name: Set Up Python Environment
-        uses: actions/setup-python@v3
+      - name: Set Up Custom Environment
+        uses: ./.github/actions/setup
         with:
           python-version: '3.x'
       - name: Trigger Update Event on ${{ matrix.repo.name }}
         env:
           GH_ORG: ${{ matrix.repo.org }}
           GH_REPO: ${{ matrix.repo.name }}
-          CLI_VERSION: ${{ needs.setup_environment.outputs.cli_version }}
+          CLI_VERSION: ${{ inputs.cli_version }}
           IS_JAVA_RELEASE: 'true'
           GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
         run: python ./.github/scripts/dispatch_new_version_event.py
