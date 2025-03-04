@@ -32,9 +32,9 @@ jobs:
   test-new-release:
     uses: ./.github/workflows/dispatch-workflow.yml
     with:
-      cli_version: ${{ github.event.inputs.cli_version }}
-      is_cli_release: ${{ github.event.inputs.is_cli_release }}
-      is_js_release: ${{ github.event.inputs.is_js_release }}
-      is_js_runtime_release: ${{ github.event.inputs.is_js_runtime_release }}
-      is_java_release: ${{ github.event.inputs.is_java_release }}
+      cli_version: ${{ inputs.cli_version }}
+      is_cli_release: ${{ inputs.is_cli_release }}
+      is_js_release: ${{ inputs.is_js_release }}
+      is_js_runtime_release: ${{ inputs.is_js_runtime_release }}
+      is_java_release: ${{ inputs.is_java_release }}
     secrets: inherit
