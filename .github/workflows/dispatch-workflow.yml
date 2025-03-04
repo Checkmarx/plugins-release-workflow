@@ -3,6 +3,22 @@ name: Dispatch CLI Version Update
 on:
   workflow_call:
     inputs:
+      is_cli_release:
+        type: boolean
+        default: true
+        description: 'Workflow will update all repos that directly consume the CLI'
+      is_js_release:
+        type: boolean
+        default: false
+        description: 'Workflow will update all repos that directly consume the Javascript Wrapper'
+      is_js_runtime_release:
+        type: boolean
+        default: false
+        description: 'Workflow will update all repos that directly consume the Javascript Runtime Wrapper'
+      is_java_release:
+        type: boolean
+        default: false
+        description: 'Workflow will update all repos that directly consume the Java Wrapper'
       cli_version:
         description: 'CLI version to update (no input will take latest)'
         required: false
@@ -11,6 +27,7 @@ on:
 
 jobs:
   update_java_wrapper:
+    if: ${{ inputs.is_cli_release == 'true' }}
     name: Update Java Wrapper
     runs-on: ubuntu-latest
     steps:
@@ -27,10 +44,12 @@ jobs:
           GH_ORG: 'CheckmarxDev'
           GH_REPO: 'ast-cli-java-wrapper'
           CLI_VERSION: ''
+          IS_CLI_RELEASE: 'true'
           GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
-        run: python ./.github/scripts/dispatch_event.py
+        run: python ./.github/scripts/dispatch_new_version_event.py
 
   update_github_action:
+    if: ${{ inputs.is_cli_release == 'true' }}
     name: Update Github Action
     runs-on: ubuntu-latest
     steps:
@@ -47,10 +66,12 @@ jobs:
           GH_ORG: 'Checkmarx'
           GH_REPO: 'ast-github-action'
           CLI_VERSION: ${{ inputs.cli_version }}
+          IS_CLI_RELEASE: 'true'
           GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
-        run: python ./.github/scripts/dispatch_event.py
+        run: python ./.github/scripts/dispatch_new_version_event.py
 
   update_javescript_wrapper_action:
+    if: ${{ inputs.is_cli_release == 'true' }}
     name: Update Javascript Wrapper Action
     runs-on: ubuntu-latest
     steps:
@@ -67,10 +88,12 @@ jobs:
           GH_ORG: 'CheckmarxDev'
           GH_REPO: 'ast-cli-javascript-wrapper'
           CLI_VERSION: ${{ inputs.cli_version }}
+          IS_CLI_RELEASE: 'true'
           GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
-        run: python ./.github/scripts/dispatch_event.py
+        run: python ./.github/scripts/dispatch_new_version_event.py
 
   update_javescript_runtime_wrapper_action:
+    if: ${{ inputs.is_cli_release == 'true' }}
     name: Update Javascript Runtime Wrapper Action
     runs-on: ubuntu-latest
     steps:
@@ -87,10 +110,12 @@ jobs:
           GH_ORG: 'CheckmarxDev'
           GH_REPO: 'ast-cli-javascript-wrapper-runtime-cli'
           CLI_VERSION: ${{ inputs.cli_version }}
+          IS_CLI_RELEASE: 'true'
           GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
-        run: python ./.github/scripts/dispatch_event.py
+        run: python ./.github/scripts/dispatch_new_version_event.py
 
   update_teamcity_action:
+    if: ${{ inputs.is_cli_release == 'true' }}
     name: Update TeamCity
     runs-on: ubuntu-latest
     steps:
@@ -107,11 +132,12 @@ jobs:
           GH_ORG: 'Checkmarx'
           GH_REPO: 'ast-teamcity-plugin'
           CLI_VERSION: ${{ inputs.cli_version }}
+          IS_CLI_RELEASE: 'true'
           GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
-        run: python ./.github/scripts/dispatch_event.py
-
+        run: python ./.github/scripts/dispatch_new_version_event.py
 
   update_visual_studio_action:
+    if: ${{ inputs.is_cli_release == 'true' }}
     name: Update Visual Studio
     runs-on: ubuntu-latest
     steps:
@@ -128,5 +154,32 @@ jobs:
           GH_ORG: 'Checkmarx'
           GH_REPO: 'ast-visual-studio-extension'
           CLI_VERSION: ${{ inputs.cli_version }}
+          IS_CLI_RELEASE: 'true'
           GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
-        run: python ./.github/scripts/dispatch_event.py
+        run: python ./.github/scripts/dispatch_new_version_event.py
+
+
+############################## JS Release #####################################
+
+  update_visual_studio_code_action:
+    if: ${{ inputs.is_js_release == 'true' }}
+    name: Update Visual Studio Code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v3
+
+      - name: Set Up Environment
+        uses: ./.github/actions/setup
+        with:
+          python-version: '3.x'
+
+      - name: Trigger Update Event On Visual Studio Code Repo
+        env:
+          GH_ORG: 'Checkmarx'
+          GH_REPO: 'ast-vscode-extension'
+          CLI_VERSION: ${{ inputs.cli_version }}
+          IS_JS_RELEASE: 'true'
+          GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
+        run: python ./.github/scripts/dispatch_new_version_event.py
+

@@ -1,4 +1,4 @@
-name: Test Auto release dispatcher workflow
+name: Test Auto Release Dispatcher Workflow
 
 on:
   workflow_dispatch:
@@ -7,11 +7,34 @@ on:
         description: 'Version to release'
         required: false
         default: ''
+      is_cli_release:
+        description: 'Is this a CLI release?'
+        required: false
+        default: true
+        type: boolean
+      is_js_release:
+        description: 'Is this a JavaScript Wrapper release?'
+        required: false
+        default: false
+        type: boolean
+      is_js_runtime_release:
+        description: 'Is this a JavaScript Runtime Wrapper release?'
+        required: false
+        default: false
+        type: boolean
+      is_java_release:
+        description: 'Is this a Java Wrapper release?'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
-  test-notify:
+  test-new-release:
     uses: ./.github/workflows/dispatch-workflow.yml
     with:
       cli_version: ${{ github.event.inputs.cli_version }}
+      is_cli_release: ${{ github.event.inputs.is_cli_release }}
+      is_js_release: ${{ github.event.inputs.is_js_release }}
+      is_js_runtime_release: ${{ github.event.inputs.is_js_runtime_release }}
+      is_java_release: ${{ github.event.inputs.is_java_release }}
     secrets: inherit
-
