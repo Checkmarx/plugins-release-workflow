@@ -26,8 +26,9 @@ on:
         type: string
 
 jobs:
+
   update_java_wrapper:
-    if: ${{ inputs.is_cli_release == 'true' }}
+    if: ${{ inputs.is_cli_release == true }}
     name: Update Java Wrapper
     runs-on: ubuntu-latest
     steps:
@@ -49,7 +50,7 @@ jobs:
         run: python ./.github/scripts/dispatch_new_version_event.py
 
   update_github_action:
-    if: ${{ inputs.is_cli_release == 'true' }}
+    if: ${{ inputs.is_cli_release == true }}
     name: Update Github Action
     runs-on: ubuntu-latest
     steps:
@@ -71,7 +72,7 @@ jobs:
         run: python ./.github/scripts/dispatch_new_version_event.py
 
   update_javescript_wrapper_action:
-    if: ${{ inputs.is_cli_release == 'true' }}
+    if: ${{ inputs.is_cli_release == true }}
     name: Update Javascript Wrapper Action
     runs-on: ubuntu-latest
     steps:
@@ -93,7 +94,7 @@ jobs:
         run: python ./.github/scripts/dispatch_new_version_event.py
 
   update_javescript_runtime_wrapper_action:
-    if: ${{ inputs.is_cli_release == 'true' }}
+    if: ${{ inputs.is_cli_release == true }}
     name: Update Javascript Runtime Wrapper Action
     runs-on: ubuntu-latest
     steps:
@@ -115,7 +116,7 @@ jobs:
         run: python ./.github/scripts/dispatch_new_version_event.py
 
   update_teamcity_action:
-    if: ${{ inputs.is_cli_release == 'true' }}
+    if: ${{ inputs.is_cli_release == true }}
     name: Update TeamCity
     runs-on: ubuntu-latest
     steps:
@@ -137,7 +138,7 @@ jobs:
         run: python ./.github/scripts/dispatch_new_version_event.py
 
   update_visual_studio_action:
-    if: ${{ inputs.is_cli_release == 'true' }}
+    if: ${{ inputs.is_cli_release == true }}
     name: Update Visual Studio
     runs-on: ubuntu-latest
     steps:
@@ -158,8 +159,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
         run: python ./.github/scripts/dispatch_new_version_event.py
 
-
-############################## JS Release #####################################
+##############################    JS Release    #####################################
 
   update_visual_studio_code_action:
     if: ${{ inputs.is_js_release == true }}
@@ -180,6 +180,30 @@ jobs:
           GH_REPO: 'ast-vscode-extension'
           CLI_VERSION: ${{ inputs.cli_version }}
           IS_JS_RELEASE: 'true'
+          GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
+        run: python ./.github/scripts/dispatch_new_version_event.py
+
+############################## JS Runtime Release #####################################
+
+  update_azure_action:
+    if: ${{ inputs.is_js_runtime_release == true }}
+    name: Update Azure Plugin
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v3
+
+      - name: Set Up Environment
+        uses: ./.github/actions/setup
+        with:
+          python-version: '3.x'
+
+      - name: Trigger Update Event On Azure Repo
+        env:
+          GH_ORG: 'Checkmarx'
+          GH_REPO: 'ast-azure-plugin'
+          CLI_VERSION: ${{ inputs.cli_version }}
+          IS_JS_RUNTIME_RELEASE: 'true'
           GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
         run: python ./.github/scripts/dispatch_new_version_event.py
 
