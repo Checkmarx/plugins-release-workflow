@@ -28,7 +28,7 @@ on:
 jobs:
   # Group CLI-related updates
   update_cli_consumers:
-    name: Update CLI Consumer: ${{ matrix.repo.name }}
+    name: Update CLI Consumers
     runs-on: ubuntu-latest
     if: ${{ inputs.is_cli_release == true }}
     strategy:
