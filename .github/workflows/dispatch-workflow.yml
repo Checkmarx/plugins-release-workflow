@@ -10,11 +10,11 @@ on:
       is_js_release:
         type: boolean
         default: false
-        description: 'Workflow will update all repos that directly consume the Javascript Wrapper'
+        description: 'Workflow will update all repos that directly consume the JavaScript Wrapper'
       is_js_runtime_release:
         type: boolean
         default: false
-        description: 'Workflow will update all repos that directly consume the Javascript Runtime Wrapper'
+        description: 'Workflow will update all repos that directly consume the JavaScript Runtime Wrapper'
       is_java_release:
         type: boolean
         default: false
@@ -26,251 +26,128 @@ on:
         type: string
 
 jobs:
-
-  update_java_wrapper:
-    if: ${{ inputs.is_cli_release == true }}
-    name: Update Java Wrapper
+  # Define a job to set up the environment
+  setup_environment:
+    name: Set Up Environment
     runs-on: ubuntu-latest
+    outputs:
+      cli_version: ${{ steps.set_version.outputs.cli_version }}
+    steps:
+      - name: Set CLI Version
+        id: set_version
+        run: echo "::set-output name=cli_version::${{ github.event.inputs.cli_version }}"
+
+  # Group CLI-related updates
+  update_cli_consumers:
+    name: Update CLI Consumers
+    needs: setup_environment
+    runs-on: ubuntu-latest
+    if: ${{ inputs.is_cli_release == true }}
+    strategy:
+      matrix:
+        repo: [
+          { org: 'CheckmarxDev', name: 'ast-cli-java-wrapper' },
+          { org: 'Checkmarx', name: 'ast-github-action' },
+          { org: 'CheckmarxDev', name: 'ast-cli-javascript-wrapper' },
+          { org: 'CheckmarxDev', name: 'ast-cli-javascript-wrapper-runtime-cli' },
+          { org: 'Checkmarx', name: 'ast-teamcity-plugin' },
+          { org: 'Checkmarx', name: 'ast-visual-studio-extension' }
+        ]
     steps:
       - name: Check out the repository
         uses: actions/checkout@v3
-
-      - name: Set Up Environment
-        uses: ./.github/actions/setup
+      - name: Set Up Python Environment
+        uses: actions/setup-python@v3
         with:
           python-version: '3.x'
-
-      - name: Trigger Update Event On Java Wrapper Repo
+      - name: Trigger Update Event on ${{ matrix.repo.name }}
         env:
-          GH_ORG: 'CheckmarxDev'
-          GH_REPO: 'ast-cli-java-wrapper'
-          CLI_VERSION: ''
+          GH_ORG: ${{ matrix.repo.org }}
+          GH_REPO: ${{ matrix.repo.name }}
+          CLI_VERSION: ${{ needs.setup_environment.outputs.cli_version }}
           IS_CLI_RELEASE: 'true'
           GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
         run: python ./.github/scripts/dispatch_new_version_event.py
 
-  update_github_action:
-    if: ${{ inputs.is_cli_release == true }}
-    name: Update Github Action
+  # Group JavaScript Wrapper-related updates
+  update_js_wrapper_consumers:
+    name: Update JavaScript Wrapper Consumers
+    needs: setup_environment
     runs-on: ubuntu-latest
-    steps:
-      - name: Check out the repository
-        uses: actions/checkout@v3
-
-      - name: Set Up Environment
-        uses: ./.github/actions/setup
-        with:
-          python-version: '3.x'
-
-      - name: Trigger Update Event On Github Action Repo
-        env:
-          GH_ORG: 'Checkmarx'
-          GH_REPO: 'ast-github-action'
-          CLI_VERSION: ${{ inputs.cli_version }}
-          IS_CLI_RELEASE: 'true'
-          GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
-        run: python ./.github/scripts/dispatch_new_version_event.py
-
-  update_javescript_wrapper_action:
-    if: ${{ inputs.is_cli_release == true }}
-    name: Update Javascript Wrapper Action
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out the repository
-        uses: actions/checkout@v3
-
-      - name: Set Up Environment
-        uses: ./.github/actions/setup
-        with:
-          python-version: '3.x'
-
-      - name: Trigger Update Event On Javascript Wrapper Repo
-        env:
-          GH_ORG: 'CheckmarxDev'
-          GH_REPO: 'ast-cli-javascript-wrapper'
-          CLI_VERSION: ${{ inputs.cli_version }}
-          IS_CLI_RELEASE: 'true'
-          GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
-        run: python ./.github/scripts/dispatch_new_version_event.py
-
-  update_javescript_runtime_wrapper_action:
-    if: ${{ inputs.is_cli_release == true }}
-    name: Update Javascript Runtime Wrapper Action
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out the repository
-        uses: actions/checkout@v3
-
-      - name: Set Up Environment
-        uses: ./.github/actions/setup
-        with:
-          python-version: '3.x'
-
-      - name: Trigger Update Event On Javascript Runtime Wrapper Repo
-        env:
-          GH_ORG: 'CheckmarxDev'
-          GH_REPO: 'ast-cli-javascript-wrapper-runtime-cli'
-          CLI_VERSION: ${{ inputs.cli_version }}
-          IS_CLI_RELEASE: 'true'
-          GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
-        run: python ./.github/scripts/dispatch_new_version_event.py
-
-  update_teamcity_action:
-    if: ${{ inputs.is_cli_release == true }}
-    name: Update TeamCity
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out the repository
-        uses: actions/checkout@v3
-
-      - name: Set Up Environment
-        uses: ./.github/actions/setup
-        with:
-          python-version: '3.x'
-
-      - name: Trigger Update Event On TeamCity Repo
-        env:
-          GH_ORG: 'Checkmarx'
-          GH_REPO: 'ast-teamcity-plugin'
-          CLI_VERSION: ${{ inputs.cli_version }}
-          IS_CLI_RELEASE: 'true'
-          GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
-        run: python ./.github/scripts/dispatch_new_version_event.py
-
-  update_visual_studio_action:
-    if: ${{ inputs.is_cli_release == true }}
-    name: Update Visual Studio
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out the repository
-        uses: actions/checkout@v3
-
-      - name: Set Up Environment
-        uses: ./.github/actions/setup
-        with:
-          python-version: '3.x'
-
-      - name: Trigger Update Event On Visual Studio Repo
-        env:
-          GH_ORG: 'Checkmarx'
-          GH_REPO: 'ast-visual-studio-extension'
-          CLI_VERSION: ${{ inputs.cli_version }}
-          IS_CLI_RELEASE: 'true'
-          GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
-        run: python ./.github/scripts/dispatch_new_version_event.py
-
-##############################    JS Release    #####################################
-
-  update_visual_studio_code_action:
     if: ${{ inputs.is_js_release == true }}
-    name: Update Visual Studio Code
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        repo: [
+          { org: 'Checkmarx', name: 'ast-vscode-extension' }
+        ]
     steps:
       - name: Check out the repository
         uses: actions/checkout@v3
-
-      - name: Set Up Environment
-        uses: ./.github/actions/setup
+      - name: Set Up Python Environment
+        uses: actions/setup-python@v3
         with:
           python-version: '3.x'
-
-      - name: Trigger Update Event On Visual Studio Code Repo
+      - name: Trigger Update Event on ${{ matrix.repo.name }}
         env:
-          GH_ORG: 'Checkmarx'
-          GH_REPO: 'ast-vscode-extension'
-          CLI_VERSION: ${{ inputs.cli_version }}
+          GH_ORG: ${{ matrix.repo.org }}
+          GH_REPO: ${{ matrix.repo.name }}
+          CLI_VERSION: ${{ needs.setup_environment.outputs.cli_version }}
           IS_JS_RELEASE: 'true'
           GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
         run: python ./.github/scripts/dispatch_new_version_event.py
 
-############################## JS Runtime Release #####################################
-
-  update_azure_action:
-    if: ${{ inputs.is_js_runtime_release == true }}
-    name: Update Azure Plugin
+  # Group JavaScript Runtime Wrapper-related updates
+  update_js_runtime_wrapper_consumers:
+    name: Update JavaScript Runtime Wrapper Consumers
+    needs: setup_environment
     runs-on: ubuntu-latest
+    if: ${{ inputs.is_js_runtime_release == true }}
+    strategy:
+      matrix:
+        repo: [
+          { org: 'Checkmarx', name: 'ast-azure-plugin' }
+        ]
     steps:
       - name: Check out the repository
         uses: actions/checkout@v3
-
-      - name: Set Up Environment
-        uses: ./.github/actions/setup
+      - name: Set Up Python Environment
+        uses: actions/setup-python@v3
         with:
           python-version: '3.x'
-
-      - name: Trigger Update Event On Azure Repo
+      - name: Trigger Update Event on ${{ matrix.repo.name }}
         env:
-          GH_ORG: 'Checkmarx'
-          GH_REPO: 'ast-azure-plugin'
-          CLI_VERSION: ${{ inputs.cli_version }}
+          GH_ORG: ${{ matrix.repo.org }}
+          GH_REPO: ${{ matrix.repo.name }}
+          CLI_VERSION: ${{ needs.setup_environment.outputs.cli_version }}
           IS_JS_RUNTIME_RELEASE: 'true'
           GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
         run: python ./.github/scripts/dispatch_new_version_event.py
 
-############################## Java Release #####################################
-
-  update_jetbrains_action:
-    if: ${{ inputs.is_java_release == true }}
-    name: Update Jetbrains Plugin
+  # Group Java Wrapper-related updates
+  update_java_wrapper_consumers:
+    name: Update Java Wrapper Consumers
+    needs: setup_environment
     runs-on: ubuntu-latest
+    if: ${{ inputs.is_java_release == true }}
+    strategy:
+      matrix:
+        repo: [
+          { org: 'Checkmarx', name: 'ast-jetbrains-plugin' },
+          { org: 'Checkmarx', name: 'ast-eclipse-plugin' },
+          { org: 'jenkinsci', name: 'checkmarx-ast-scanner-plugin' }
+        ]
     steps:
       - name: Check out the repository
         uses: actions/checkout@v3
-
-      - name: Set Up Environment
-        uses: ./.github/actions/setup
+      - name: Set Up Python Environment
+        uses: actions/setup-python@v3
         with:
           python-version: '3.x'
-
-      - name: Trigger Update Event On Jetbrains Repo
+      - name: Trigger Update Event on ${{ matrix.repo.name }}
         env:
-          GH_ORG: 'Checkmarx'
-          GH_REPO: 'ast-jetbrains-plugin'
-          CLI_VERSION: ${{ inputs.cli_version }}
-          IS_JAVA_RELEASE: 'true'
-          GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
-        run: python ./.github/scripts/dispatch_new_version_event.py
-
-  update_eclipse_action:
-    if: ${{ inputs.is_java_release == true }}
-    name: Update Eclipse Plugin
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out the repository
-        uses: actions/checkout@v3
-
-      - name: Set Up Environment
-        uses: ./.github/actions/setup
-        with:
-          python-version: '3.x'
-
-      - name: Trigger Update Event On Eclipse Repo
-        env:
-          GH_ORG: 'Checkmarx'
-          GH_REPO: 'ast-eclipse-plugin'
-          CLI_VERSION: ${{ inputs.cli_version }}
-          IS_JAVA_RELEASE: 'true'
-          GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
-        run: python ./.github/scripts/dispatch_new_version_event.py
-
-  update_jenkins_action:
-    if: ${{ inputs.is_java_release == true }}
-    name: Update Jenkins Plugin
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out the repository
-        uses: actions/checkout@v3
-
-      - name: Set Up Environment
-        uses: ./.github/actions/setup
-        with:
-          python-version: '3.x'
-
-      - name: Trigger Update Event On Jenkins  Repo
-        env:
-          GH_ORG: 'jenkinsci'
-          GH_REPO: 'checkmarx-ast-scanner-plugin'
-          CLI_VERSION: ${{ inputs.cli_version }}
+          GH_ORG: ${{ matrix.repo.org }}
+          GH_REPO: ${{ matrix.repo.name }}
+          CLI_VERSION: ${{ needs.setup_environment.outputs.cli_version }}
           IS_JAVA_RELEASE: 'true'
           GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
         run: python ./.github/scripts/dispatch_new_version_event.py
