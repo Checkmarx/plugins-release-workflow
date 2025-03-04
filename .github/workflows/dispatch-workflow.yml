@@ -207,3 +207,70 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
         run: python ./.github/scripts/dispatch_new_version_event.py
 
+############################## Java Release #####################################
+
+  update_jetbrains_action:
+    if: ${{ inputs.is_java_release == true }}
+    name: Update Jetbrains Plugin
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v3
+
+      - name: Set Up Environment
+        uses: ./.github/actions/setup
+        with:
+          python-version: '3.x'
+
+      - name: Trigger Update Event On Jetbrains Repo
+        env:
+          GH_ORG: 'Checkmarx'
+          GH_REPO: 'ast-jetbrains-plugin'
+          CLI_VERSION: ${{ inputs.cli_version }}
+          IS_JAVA_RELEASE: 'true'
+          GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
+        run: python ./.github/scripts/dispatch_new_version_event.py
+
+  update_eclipse_action:
+    if: ${{ inputs.is_java_release == true }}
+    name: Update Eclipse Plugin
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v3
+
+      - name: Set Up Environment
+        uses: ./.github/actions/setup
+        with:
+          python-version: '3.x'
+
+      - name: Trigger Update Event On Eclipse Repo
+        env:
+          GH_ORG: 'Checkmarx'
+          GH_REPO: 'ast-eclipse-plugin'
+          CLI_VERSION: ${{ inputs.cli_version }}
+          IS_JAVA_RELEASE: 'true'
+          GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
+        run: python ./.github/scripts/dispatch_new_version_event.py
+
+  update_jenkins_action:
+    if: ${{ inputs.is_java_release == true }}
+    name: Update Jenkins Plugin
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v3
+
+      - name: Set Up Environment
+        uses: ./.github/actions/setup
+        with:
+          python-version: '3.x'
+
+      - name: Trigger Update Event On Jenkins  Repo
+        env:
+          GH_ORG: 'jenkinsci'
+          GH_REPO: 'checkmarx-ast-scanner-plugin'
+          CLI_VERSION: ${{ inputs.cli_version }}
+          IS_JAVA_RELEASE: 'true'
+          GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
+        run: python ./.github/scripts/dispatch_new_version_event.py
