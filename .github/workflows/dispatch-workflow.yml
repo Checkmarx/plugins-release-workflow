@@ -34,12 +34,12 @@ jobs:
     strategy:
       matrix:
         repo: [
-          { org: 'CheckmarxDev', name: 'ast-cli-java-wrapper' },
-          { org: 'Checkmarx', name: 'ast-github-action' },
-          { org: 'CheckmarxDev', name: 'ast-cli-javascript-wrapper' },
+#          { org: 'CheckmarxDev', name: 'ast-cli-java-wrapper' },
+#          { org: 'Checkmarx', name: 'ast-github-action' },
+#          { org: 'CheckmarxDev', name: 'ast-cli-javascript-wrapper' },
           { org: 'CheckmarxDev', name: 'ast-cli-javascript-wrapper-runtime-cli' },
-          { org: 'Checkmarx', name: 'ast-teamcity-plugin' },
-          { org: 'Checkmarx', name: 'ast-visual-studio-extension' }
+#          { org: 'Checkmarx', name: 'ast-teamcity-plugin' },
+#          { org: 'Checkmarx', name: 'ast-visual-studio-extension' }
         ]
     steps:
       - name: Check out the repository
