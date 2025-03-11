@@ -45,6 +45,12 @@ jobs:
       - name: Check Out Repository
         uses: actions/checkout@v3
 
+      - name: Check Out External Repository
+        uses: actions/checkout@v3
+        with:
+          repository: Checkmarx/plugins-release-workflow
+          path: plugins-release-workflow
+
       - name: Set Up Python
         uses: actions/setup-python@v4
         with:
@@ -63,7 +69,7 @@ jobs:
           CLI_VERSION: ${{ inputs.cli_version }}
           IS_CLI_RELEASE: 'true'
           GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
-        run: python ./.github/scripts/dispatch_new_version_event.py
+        run: python plugins-release-workflow/.github/scripts/dispatch_new_version_event.py
 
   # Group JavaScript Wrapper-related updates
   update_js_wrapper_consumers:
@@ -78,6 +84,12 @@ jobs:
     steps:
       - name: Check Out Repository
         uses: actions/checkout@v3
+
+      - name: Check Out External Repository
+        uses: actions/checkout@v3
+        with:
+          repository: Checkmarx/plugins-release-workflow
+          path: plugins-release-workflow
 
       - name: Set Up Python
         uses: actions/setup-python@v4
@@ -97,7 +109,7 @@ jobs:
           CLI_VERSION: ${{ inputs.cli_version }}
           IS_JS_RELEASE: 'true'
           GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
-        run: python ./.github/scripts/dispatch_new_version_event.py
+        run: python plugins-release-workflow/.github/scripts/dispatch_new_version_event.py
 
   # Group JavaScript Runtime Wrapper-related updates
   update_js_runtime_wrapper_consumers:
@@ -112,6 +124,12 @@ jobs:
     steps:
       - name: Check Out Repository
         uses: actions/checkout@v3
+
+      - name: Check Out External Repository
+        uses: actions/checkout@v3
+        with:
+          repository: Checkmarx/plugins-release-workflow
+          path: plugins-release-workflow
 
       - name: Set Up Python
         uses: actions/setup-python@v4
@@ -131,7 +149,7 @@ jobs:
           CLI_VERSION: ${{ inputs.cli_version }}
           IS_JS_RUNTIME_RELEASE: 'true'
           GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
-        run: python ./.github/scripts/dispatch_new_version_event.py
+        run: python plugins-release-workflow/.github/scripts/dispatch_new_version_event.py
 
   # Group Java Wrapper-related updates
   update_java_wrapper_consumers:
@@ -148,6 +166,12 @@ jobs:
     steps:
       - name: Check Out Repository
         uses: actions/checkout@v3
+
+      - name: Check Out External Repository
+        uses: actions/checkout@v3
+        with:
+          repository: Checkmarx/plugins-release-workflow
+          path: plugins-release-workflow
 
       - name: Set Up Python
         uses: actions/setup-python@v4
@@ -167,4 +191,4 @@ jobs:
           CLI_VERSION: ${{ inputs.cli_version }}
           IS_JAVA_RELEASE: 'true'
           GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
-        run: python ./.github/scripts/dispatch_new_version_event.py
+        run: python plugins-release-workflow/.github/scripts/dispatch_new_version_event.py
