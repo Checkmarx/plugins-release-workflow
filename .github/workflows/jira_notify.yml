@@ -54,22 +54,43 @@ jobs:
       - name: Extract Issue Fields
         id: extract_fields
         run: |
+          # Extracting fields from the issue body
           ISSUE_DESCRIPTION=$(echo "${{ inputs.body }}" | awk -v RS='' '/### What problem does this solve\?/{getline; print}')
           PROPOSED_SOLUTION=$(echo "${{ inputs.body }}" | awk -v RS='' '/### Proposed Solution/{getline; print}')
           IMPORTANCE_LEVEL=$(echo "${{ inputs.body }}" | awk -v RS='' '/### Importance Level/{getline; print}')
           ADDITIONAL_INFO=$(echo "${{ inputs.body }}" | awk -v RS='' '/### Additional Information/{getline; print}')
       
+          # Printing extracted values to the workflow log for verification
           echo "Extracted Fields:"
           echo "What Problem Does This Solve: $ISSUE_DESCRIPTION"
           echo "Proposed Solution: $PROPOSED_SOLUTION"
           echo "Importance Level: $IMPORTANCE_LEVEL"
           echo "Additional Information: $ADDITIONAL_INFO"
       
-          echo "ISSUE_DESCRIPTION=$ISSUE_DESCRIPTION" >> $GITHUB_ENV
-          echo "PROPOSED_SOLUTION=$PROPOSED_SOLUTION" >> $GITHUB_ENV
-          echo "IMPORTANCE_LEVEL=$IMPORTANCE_LEVEL" >> $GITHUB_ENV
-          echo "ADDITIONAL_INFO=$ADDITIONAL_INFO" >> $GITHUB_ENV
-        
+          # Setting environment variables using the delimiter syntax
+          {
+            echo 'ISSUE_DESCRIPTION<<EOF'
+            echo "$ISSUE_DESCRIPTION"
+            echo 'EOF'
+          } >> $GITHUB_ENV
+      
+          {
+            echo 'PROPOSED_SOLUTION<<EOF'
+            echo "$PROPOSED_SOLUTION"
+            echo 'EOF'
+          } >> $GITHUB_ENV
+      
+          {
+            echo 'IMPORTANCE_LEVEL<<EOF'
+            echo "$IMPORTANCE_LEVEL"
+            echo 'EOF'
+          } >> $GITHUB_ENV
+      
+          {
+            echo 'ADDITIONAL_INFO<<EOF'
+            echo "$ADDITIONAL_INFO"
+            echo 'EOF'
+          } >> $GITHUB_ENV
         
 
       - name: Format Jira Description
