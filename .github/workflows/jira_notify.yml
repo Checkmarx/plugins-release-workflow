@@ -45,37 +45,47 @@ jobs:
             echo "Selected Issue Type: ENHANCEMENT"
           fi
 
+      - name: Parse Issue Form
+        id: parse_issue
+        uses: issue-ops/parser@v4.1.0
+        with:
+          body: ${{ github.event.issue.body }}
+
       - name: Extract Issue Fields
         id: extract_fields
         run: |
-          ISSUE_DESCRIPTION=$(echo "${{ inputs.body }}" | awk -v RS='' '/### What happened?/{getline; print}')
+          # Extracting fields from the issue body
+          ISSUE_DESCRIPTION=$(echo "${{ inputs.body }}" | awk -v RS='' '/### What happened\?/{getline; print}')
           ISSUE_VERSION=$(echo "${{ inputs.body }}" | awk -v RS='' '/### Version/{getline; print}')
           ISSUE_OS=$(echo "${{ inputs.body }}" | awk -v RS='' '/### Operating System & Version/{getline; print}')
           ISSUE_LOGS=$(echo "${{ inputs.body }}" | awk -v RS='' '/### Relevant log output/{getline; print}')
-
+      
+          # Printing extracted values to the workflow log
           echo "Extracted Fields:"
           echo "What Happened: $ISSUE_DESCRIPTION"
           echo "Version: $ISSUE_VERSION"
-          echo "OS Version: $ISSUE_OS"
-          echo "Logs: $ISSUE_LOGS"
-
+          echo "Operating System & Version: $ISSUE_OS"
+          echo "Relevant Logs: $ISSUE_LOGS"
+      
+          # Setting environment variables for use in subsequent steps
           echo "ISSUE_DESCRIPTION=$ISSUE_DESCRIPTION" >> $GITHUB_ENV
           echo "ISSUE_VERSION=$ISSUE_VERSION" >> $GITHUB_ENV
           echo "ISSUE_OS=$ISSUE_OS" >> $GITHUB_ENV
           echo "ISSUE_LOGS=$ISSUE_LOGS" >> $GITHUB_ENV
+        
 
       - name: Format Jira Description
         id: format_description
         run: |
           FORMATTED_DESCRIPTION="*Issue Title:* ${{ inputs.title }} \\\\"
-          FORMATTED_DESCRIPTION+=" *Repository:* ${{ inputs.repo }} \\\\"
-          FORMATTED_DESCRIPTION+=" *What Happened:* $ISSUE_DESCRIPTION \\\\"
-          FORMATTED_DESCRIPTION+=" *Version:* $ISSUE_VERSION \\\\"
-          FORMATTED_DESCRIPTION+=" *Operating System & Version:* $ISSUE_OS \\\\"
+          FORMATTED_DESCRIPTION+="*Repository:* ${{ inputs.repo }} \\\\"
+          FORMATTED_DESCRIPTION+="*What Happened:* $ISSUE_DESCRIPTION \\\\"
+          FORMATTED_DESCRIPTION+="*Version:* $ISSUE_VERSION \\\\"
+          FORMATTED_DESCRIPTION+="*Operating System & Version:* $ISSUE_OS \\\\"
           if [[ -n "$ISSUE_LOGS" ]]; then
             FORMATTED_DESCRIPTION+=" *Relevant Logs:*\n{code}$ISSUE_LOGS{code} \\\\"
           fi
-          FORMATTED_DESCRIPTION+=" [View original issue|${{ inputs.html_url }}]"
+          FORMATTED_DESCRIPTION+="[View original issue|${{ inputs.html_url }}]"
           
           echo "FORMATTED_DESCRIPTION=$FORMATTED_DESCRIPTION" >> $GITHUB_ENV
 
