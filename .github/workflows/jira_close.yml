@@ -55,4 +55,4 @@ jobs:
         uses: atlassian/gajira-transition@v2
         with:
           issue: ${{ steps.extract_key.outputs.jira_key }}
-          transition: "Done" # Replace with your actual transition name if needed
+          transition: "Done"
