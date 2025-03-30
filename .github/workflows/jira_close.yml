@@ -16,10 +16,10 @@ jobs:
   close_jira:
     runs-on: ubuntu-latest
     env:
-      JIRA_URL: "https://checkmarx.atlassian.net/"
+      JIRA_URL: "https://checkmarx.atlassian.net"
     steps:
       - name: Jira Login
-        uses: atlassian/gajira-login@ca13f8850ea309cf44a6e4e0c49d9aa48ac3ca4c
+        uses: atlassian/gajira-login@v3
         env:
           JIRA_BASE_URL: ${{ env.JIRA_URL }}
           JIRA_USER_EMAIL: ${{ secrets.AST_JIRA_USER_EMAIL }}
@@ -32,27 +32,39 @@ jobs:
           script: |
             const [owner, repo] = "${{ inputs.repo }}".split('/');
             const issue_number = ${{ inputs.issue_number }};
-
-            const comments = await github.issues.listComments({
-              owner,
-              repo,
-              issue_number
-            });
+            const comments = await github.issues.listComments({ owner, repo, issue_number });
 
             const jiraRegex = /AST-\d{3,5}/;
             for (const comment of comments.data) {
               const match = comment.body.match(jiraRegex);
               if (match) {
                 core.setOutput("jira_key", match[0]);
-                console.log("Found Jira Key:", match[0]);
                 return;
               }
             }
+            core.setFailed("No Jira issue key found in comments.");
 
-            core.setFailed("No Jira issue key found in issue comments.");
+      - name: Get current Jira status
+        id: get_status
+        run: |
+          RESPONSE=$(curl -s -u "${{ secrets.AST_JIRA_USER_EMAIL }}:${{ secrets.AST_JIRA_API_TOKEN }}" \
+            -X GET \
+            -H "Accept: application/json" \
+            "${{ env.JIRA_URL }}/rest/api/3/issue/${{ steps.extract_key.outputs.jira_key }}")
 
-      - name: Transition Jira Issue to Done
-        uses: atlassian/gajira-transition@v3
+          STATUS=$(echo "$RESPONSE" | jq -r '.fields.status.name')
+          echo "Current status is: $STATUS"
+          echo "jira_status=$STATUS" >> $GITHUB_OUTPUT
+
+      - name: Transition to In Progress (if needed)
+        if: steps.get_status.outputs.jira_status == 'Open'
+        uses: atlassian/gajira-transition@v2
+        with:
+          issue: ${{ steps.extract_key.outputs.jira_key }}
+          transition: "Start"
+
+      - name: Transition to Done
+        uses: atlassian/gajira-transition@v2
         with:
           issue: ${{ steps.extract_key.outputs.jira_key }}
           transition: "Done"
