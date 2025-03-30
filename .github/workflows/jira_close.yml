@@ -67,4 +67,4 @@ jobs:
         uses: atlassian/gajira-transition@v3
         with:
           issue: ${{ steps.extract_key.outputs.jira_key }}
-          transition: "Done"
+          transition: "Completed and Approved"
