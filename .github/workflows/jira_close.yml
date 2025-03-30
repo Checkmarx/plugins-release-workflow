@@ -1,0 +1,58 @@
+name: Close Jira
+
+on:
+  workflow_call:
+    inputs:
+      issue_number:
+        description: 'GitHub issue number'
+        required: true
+        type: number
+      repo:
+        description: 'Repository full name (owner/repo)'
+        required: true
+        type: string
+
+jobs:
+  close_jira:
+    runs-on: ubuntu-latest
+    env:
+      JIRA_URL: "https://checkmarx.atlassian.net/"
+    steps:
+      - name: Jira Login
+        uses: atlassian/gajira-login@ca13f8850ea309cf44a6e4e0c49d9aa48ac3ca4c
+        env:
+          JIRA_BASE_URL: ${{ env.JIRA_URL }}
+          JIRA_USER_EMAIL: ${{ secrets.AST_JIRA_USER_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.AST_JIRA_API_TOKEN }}
+
+      - name: Extract Jira Issue Key
+        id: extract_key
+        uses: actions/github-script@v4
+        with:
+          script: |
+            const [owner, repo] = "${{ inputs.repo }}".split('/');
+            const issue_number = ${{ inputs.issue_number }};
+
+            const comments = await github.issues.listComments({
+              owner,
+              repo,
+              issue_number
+            });
+
+            const jiraRegex = /AST-\d{3,5}/;
+            for (const comment of comments.data) {
+              const match = comment.body.match(jiraRegex);
+              if (match) {
+                core.setOutput("jira_key", match[0]);
+                console.log("Found Jira Key:", match[0]);
+                return;
+              }
+            }
+
+            core.setFailed("No Jira issue key found in issue comments.");
+
+      - name: Transition Jira Issue to Done
+        uses: atlassian/gajira-transition@v2
+        with:
+          issue: ${{ steps.extract_key.outputs.jira_key }}
+          transition: "Done" # Replace with your actual transition name if needed
