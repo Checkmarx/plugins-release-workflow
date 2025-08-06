@@ -147,53 +147,53 @@ jobs:
               }
             }
 
-      - name: Send notification to Teams
-        uses: Skitionek/notify-microsoft-teams@v1.0.8
-        with:
-          webhook_url: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
-          raw: >
-            {
-              "type": "message",
-              "attachments": [
-                {
-                  "contentType": "application/vnd.microsoft.card.adaptive",
-                  "content": {
-                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                    "type": "AdaptiveCard",
-                    "version": "1.4",
-                    "msteams": {
-                      "width": "Full"
-                    },
-                    "body": [
-                      {
-                        "type": "TextBlock",
-                        "text": "New Release: **${{ inputs.product_name }} - ${{ inputs.release_version }}**",
-                        "weight": "Bolder",
-                        "size": "Medium"
-                      },
-                      {
-                        "type": "FactSet",
-                        "facts": [
-                          { "title": "Product:", "value": "${{ inputs.product_name }}" },
-                          { "title": "Version:", "value": "${{ inputs.release_version }}" },
-                          { "title": "CLI Version:", "value": "${{ inputs.cli_release_version }}" },
-                          { "title": "Contributors:", "value": "${{ steps.extract_contributors.outputs.formatted_contributors }}" }
-                        ]
-                      },
-                      {
-                        "type": "TextBlock",
-                        "text": ${{ steps.sanitize_release_notes.outputs.sanitized_release_notes }},
-                        "wrap": true
-                      }
-                    ],
-                    "actions": [
-                      {
-                        "type": "Action.OpenUrl",
-                        "title": "View Release",
-                        "url": "${{ inputs.release_url }}"
-                      }
-                    ]
-                  }
-                }
-              ]
-            }
+#      - name: Send notification to Teams
+#        uses: Skitionek/notify-microsoft-teams@v1.0.8
+#        with:
+#          webhook_url: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
+#          raw: >
+#            {
+#              "type": "message",
+#              "attachments": [
+#                {
+#                  "contentType": "application/vnd.microsoft.card.adaptive",
+#                  "content": {
+#                    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+#                    "type": "AdaptiveCard",
+#                    "version": "1.4",
+#                    "msteams": {
+#                      "width": "Full"
+#                    },
+#                    "body": [
+#                      {
+#                        "type": "TextBlock",
+#                        "text": "New Release: **${{ inputs.product_name }} - ${{ inputs.release_version }}**",
+#                        "weight": "Bolder",
+#                        "size": "Medium"
+#                      },
+#                      {
+#                        "type": "FactSet",
+#                        "facts": [
+#                          { "title": "Product:", "value": "${{ inputs.product_name }}" },
+#                          { "title": "Version:", "value": "${{ inputs.release_version }}" },
+#                          { "title": "CLI Version:", "value": "${{ inputs.cli_release_version }}" },
+#                          { "title": "Contributors:", "value": "${{ steps.extract_contributors.outputs.formatted_contributors }}" }
+#                        ]
+#                      },
+#                      {
+#                        "type": "TextBlock",
+#                        "text": ${{ steps.sanitize_release_notes.outputs.sanitized_release_notes }},
+#                        "wrap": true
+#                      }
+#                    ],
+#                    "actions": [
+#                      {
+#                        "type": "Action.OpenUrl",
+#                        "title": "View Release",
+#                        "url": "${{ inputs.release_url }}"
+#                      }
+#                    ]
+#                  }
+#                }
+#              ]
+#            }
