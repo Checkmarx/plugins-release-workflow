@@ -1,0 +1,123 @@
+name: Checkmarx One Scan - Teams Notification 
+on:
+  workflow_call:
+    inputs:
+      cx_result:
+        description: "Result of the cx-scan job (success, failure, cancelled)"
+        required: true
+        type: string
+      repository:
+        description: "Full repository name (owner/repo)"
+        required: true
+        type: string
+      ref_name:
+        description: "Branch name"
+        required: true
+        type: string
+      actor:
+        description: "GitHub actor who triggered the workflow"
+        required: true
+        type: string
+      event_name:
+        description: "GitHub event name"
+        required: true
+        type: string
+      run_id:
+        description: "Workflow run ID"
+        required: true
+        type: string
+      server_url:
+        description: "GitHub server URL"
+        required: true
+        type: string
+      pr_number:
+        description: "Pull request number (if applicable)"
+        required: false
+        type: string
+      pr_url:
+        description: "Pull request URL (if applicable)"
+        required: false
+        type: string
+
+    secrets:
+      teams_webhook_url:
+        required: true
+
+jobs:
+  notify-teams:
+    name: Notify Teams
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Notify Microsoft Teams
+        run: |
+          REPO_NAME="${{ inputs.repository }}"
+          REPO_NAME="${REPO_NAME#*/}"
+
+          if [[ -n "${{ inputs.pr_number }}" ]]; then
+            PR_SECTION=",
+                    {
+                      \"type\": \"TextBlock\",
+                      \"text\": \"**Pull Request:** [#${{ inputs.pr_number }}](${{ inputs.pr_url }})\",
+                      \"wrap\": true
+                    }"
+          else
+            PR_SECTION=""
+          fi
+
+          if [[ "${{ inputs.cx_result }}" == "success" ]]; then
+            COLOR="Good"
+            TITLE="✅ ${REPO_NAME} - Checkmarx One Scan Succeeded"
+            STATUS_TEXT="The Checkmarx One Scan job completed successfully."
+          else
+            COLOR="Attention"
+            TITLE="❌ ${REPO_NAME} - Checkmarx One Scan Failed"
+            STATUS_TEXT="The Checkmarx One Scan job failed. Review the run for details."
+          fi
+
+          RUN_URL="${{ inputs.server_url }}/${{ inputs.repository }}/actions/runs/${{ inputs.run_id }}"
+
+          curl -f -H 'Content-Type: application/json' -d "{
+            \"type\": \"message\",
+            \"attachments\": [
+              {
+                \"contentType\": \"application/vnd.microsoft.card.adaptive\",
+                \"content\": {
+                  \"\$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",
+                  \"type\": \"AdaptiveCard\",
+                  \"version\": \"1.4\",
+                  \"body\": [
+                    {
+                      \"type\": \"TextBlock\",
+                      \"text\": \"$TITLE\",
+                      \"weight\": \"Bolder\",
+                      \"size\": \"Medium\",
+                      \"color\": \"$COLOR\"
+                    },
+                    {
+                      \"type\": \"TextBlock\",
+                      \"text\": \"$STATUS_TEXT\",
+                      \"wrap\": true
+                    },
+                    {
+                      \"type\": \"FactSet\",
+                      \"facts\": [
+                        {\"title\": \"Repository:\", \"value\": \"${{ inputs.repository }}\"},
+                        {\"title\": \"Branch:\", \"value\": \"${{ inputs.ref_name }}\"},
+                        {\"title\": \"Triggered By:\", \"value\": \"${{ inputs.actor }}\"},
+                        {\"title\": \"Event:\", \"value\": \"${{ inputs.event_name }}\"}
+                      ]
+                    }
+                    $PR_SECTION
+                  ],
+                  \"actions\": [
+                    {
+                      \"type\": \"Action.OpenUrl\",
+                      \"title\": \"View Workflow Run\",
+                      \"url\": \"$RUN_URL\"
+                    }
+                  ]
+                }
+              }
+            ]
+          }" "${{ secrets.teams_webhook_url }}"
