@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744
       - name: Code Review
         uses: aidar-freeed/ai-codereviewer@a9a064dfa1db8c83f40ef63f6e247fa09c935ed6 #main-22.1.25
         with:
