@@ -25,11 +25,14 @@ on:
         default: ''
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   # Group CLI-related updates
   update_cli_consumers:
     name: Update CLI Consumers
-    runs-on: ubuntu-latest
+    runs-on: cx-public-ubuntu-x64
     if: ${{ inputs.is_cli_release == true }}
     strategy:
       matrix:
@@ -43,16 +46,16 @@ jobs:
         ]
     steps:
       - name: Check Out Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
 
       - name: Check Out External Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
         with:
           repository: Checkmarx/plugins-release-workflow
           path: plugins-release-workflow
 
       - name: Set Up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
         with:
           python-version: '3.x'
 
@@ -74,7 +77,7 @@ jobs:
   # Group JavaScript Wrapper-related updates
   update_js_wrapper_consumers:
     name: Update JavaScript Wrapper Consumers
-    runs-on: ubuntu-latest
+    runs-on: cx-public-ubuntu-x64
     if: ${{ inputs.is_js_release == true }}
     strategy:
       matrix:
@@ -83,16 +86,16 @@ jobs:
         ]
     steps:
       - name: Check Out Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
 
       - name: Check Out External Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
         with:
           repository: Checkmarx/plugins-release-workflow
           path: plugins-release-workflow
 
       - name: Set Up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
         with:
           python-version: '3.x'
 
@@ -114,7 +117,7 @@ jobs:
   # Group JavaScript Runtime Wrapper-related updates
   update_js_runtime_wrapper_consumers:
     name: Update JavaScript Runtime Wrapper Consumers
-    runs-on: ubuntu-latest
+    runs-on: cx-public-ubuntu-x64
     if: ${{ inputs.is_js_runtime_release == true }}
     strategy:
       matrix:
@@ -123,16 +126,16 @@ jobs:
         ]
     steps:
       - name: Check Out Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
 
       - name: Check Out External Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
         with:
           repository: Checkmarx/plugins-release-workflow
           path: plugins-release-workflow
 
       - name: Set Up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
         with:
           python-version: '3.x'
 
@@ -154,7 +157,7 @@ jobs:
   # Group Java Wrapper-related updates
   update_java_wrapper_consumers:
     name: Update Java Wrapper Consumers
-    runs-on: ubuntu-latest
+    runs-on: cx-public-ubuntu-x64
     if: ${{ inputs.is_java_release == true }}
     strategy:
       matrix:
@@ -165,16 +168,16 @@ jobs:
         ]
     steps:
       - name: Check Out Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
 
       - name: Check Out External Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
         with:
           repository: Checkmarx/plugins-release-workflow
           path: plugins-release-workflow
 
       - name: Set Up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
         with:
           python-version: '3.x'
 
