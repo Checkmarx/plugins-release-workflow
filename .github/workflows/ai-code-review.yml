@@ -17,7 +17,7 @@ on:
 permissions: write-all
 jobs:
   code_review:
-    runs-on: ubuntu-latest
+    runs-on: cx-public-ubuntu-x64
     steps:
       - name: Checkout repository
         uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744

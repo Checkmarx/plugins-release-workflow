@@ -24,12 +24,12 @@ on:
 
 jobs:
   notify-teams:
-    runs-on: ubuntu-latest
+    runs-on: cx-public-ubuntu-x64
 
     steps:
       - name: Fetch Release Notes
         id: fetch_release_notes
-        uses: actions/github-script@v6
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410 # v6.4.1
         with:
           script: |
             const releaseUrl = '${{ inputs.release_url }}';
@@ -109,7 +109,7 @@ jobs:
       
 
       - name: Send notification to Teams
-        uses: Skitionek/notify-microsoft-teams@v1.0.8
+        uses: Skitionek/notify-microsoft-teams@9c67757f64d610fb6748d8ff3c11f284355ed7ec # v1.0.8
         with:
           webhook_url: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
           raw: >
@@ -160,7 +160,7 @@ jobs:
             }
 
       - name: Send notification to Teams (SYPHER TEAM)
-        uses: Skitionek/notify-microsoft-teams@v1.0.8
+        uses: Skitionek/notify-microsoft-teams@9c67757f64d610fb6748d8ff3c11f284355ed7ec # v1.0.8
         with:
           webhook_url: ${{ secrets.MS_TEAMS_WEBHOOK_URL_SYPHER }}
           raw: >
@@ -222,7 +222,7 @@ jobs:
           echo "jira_release_version=$jira_release_version" >> $GITHUB_OUTPUT
 
       - name: Create New JIRA Release
-        uses: satak/webrequest-action@master
+        uses: satak/webrequest-action@3697cc0c0ba0d501729b080ab5825c04bf96132e # master
         with:
           url: ${{ secrets.JIRA_RELEASE_WEBHOOK_URL }}
           headers: '{"X-Automation-Webhook-Token": "${{ secrets.JIRA_RELEASE_WEBHOOK_TOKEN }}"}'
@@ -237,7 +237,7 @@ jobs:
             }
 
       - name: Send Jira Tickets to Webhook
-        uses: satak/webrequest-action@master
+        uses: satak/webrequest-action@3697cc0c0ba0d501729b080ab5825c04bf96132e # master
         with:
           url: ${{ secrets.JIRA_TICKETS_WEBHOOK_URL }}
           headers: '{"X-Automation-Webhook-Token": "${{ secrets.JIRA_AUTOMATION_WEBHOOK_TOKEN }}"}'

@@ -43,10 +43,13 @@ on:
       teams_webhook_url:
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   notify-teams:
     name: Notify Teams
-    runs-on: ubuntu-latest
+    runs-on: cx-public-ubuntu-x64
     if: always()
     steps:
       - name: Notify Microsoft Teams
