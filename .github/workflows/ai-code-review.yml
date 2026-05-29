@@ -14,10 +14,14 @@ on:
         default: ''
         type: string
 
-permissions: write-all
+permissions: {}
+
 jobs:
   code_review:
     runs-on: cx-public-ubuntu-x64
+    permissions:
+      contents: read
+      pull-requests: write # Needed for review PR comments
     steps:
       - name: Checkout repository
         uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744
