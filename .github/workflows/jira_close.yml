@@ -11,6 +11,11 @@ on:
         description: 'Repository full name (owner/repo)'
         required: true
         type: string
+    secrets:
+      AST_JIRA_API_TOKEN:
+        required: true
+      AST_JIRA_USER_EMAIL:
+        required: true
 
 jobs:
   close_jira:

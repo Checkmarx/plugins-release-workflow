@@ -13,6 +13,9 @@ on:
         required: false
         default: ''
         type: string
+    secrets:
+      OPENAI_API_KEY:
+        required: true
 
 permissions: {}
 
