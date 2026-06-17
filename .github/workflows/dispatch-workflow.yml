@@ -24,6 +24,9 @@ on:
         required: false
         default: ''
         type: string
+    secrets:
+      DISPATCH_GH_TOKEN:
+        required: true
 
 permissions:
   contents: read

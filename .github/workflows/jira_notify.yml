@@ -20,6 +20,15 @@ on:
         description: 'Repository name'
         required: true
         type: string
+    secrets:
+      AST_JIRA_API_TOKEN:
+        required: true
+      AST_JIRA_USER_EMAIL:
+        required: true
+      JIRA_FIELDS_BUG:
+        required: true
+      JIRA_FIELDS_OTHER:
+        required: true
 
 jobs:
   notify_jira:
