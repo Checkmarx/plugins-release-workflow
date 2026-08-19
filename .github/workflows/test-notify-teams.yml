@@ -32,6 +32,9 @@ on:
         type: string
         default: JETBRAINS
 
+permissions:
+  contents: read
+
 jobs:
   test-notify:
     uses: ./.github/workflows/release-notify.yml
@@ -42,5 +45,10 @@ jobs:
       release_author: ${{ github.event.inputs.release_author }}
       release_url: ${{ github.event.inputs.release_url }}
       jira_product_name: ${{ github.event.inputs.jira_product_name }}
-    secrets: inherit
-
+    secrets:
+      JIRA_AUTOMATION_WEBHOOK_TOKEN: ${{ secrets.JIRA_AUTOMATION_WEBHOOK_TOKEN }}
+      JIRA_RELEASE_WEBHOOK_TOKEN: ${{ secrets.JIRA_RELEASE_WEBHOOK_TOKEN }}
+      JIRA_RELEASE_WEBHOOK_URL: ${{ secrets.JIRA_RELEASE_WEBHOOK_URL }}
+      JIRA_TICKETS_WEBHOOK_URL: ${{ secrets.JIRA_TICKETS_WEBHOOK_URL }}
+      MS_TEAMS_WEBHOOK_URL: ${{ secrets.MS_TEAMS_WEBHOOK_URL }}
+      MS_TEAMS_WEBHOOK_URL_SYPHER: ${{ secrets.MS_TEAMS_WEBHOOK_URL_SYPHER }}

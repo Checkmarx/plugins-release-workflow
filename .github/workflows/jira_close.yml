@@ -17,11 +17,17 @@ on:
       AST_JIRA_USER_EMAIL:
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   close_jira:
+    name: Close Jira
     runs-on: cx-public-ubuntu-x64
     env:
       JIRA_URL: "https://checkmarx.atlassian.net"
+      REPO: ${{ inputs.repo }}
+      ISSUE_NUMBER: ${{ inputs.issue_number }}
     steps:
       - name: Jira Login
         uses: atlassian/gajira-login@ca13f8850ea309cf44a6e4e0c49d9aa48ac3ca4c # v3.0.0
@@ -33,10 +39,13 @@ jobs:
       - name: Extract Jira Issue Key
         id: extract_key
         uses: actions/github-script@10b53a9ec6c222bb4ce97aa6bd2b5f739696b536 # v4.2.0
+        env:
+          REPO: ${{ inputs.repo }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
         with:
           script: |
-            const [owner, repo] = "${{ inputs.repo }}".split('/');
-            const issue_number = ${{ inputs.issue_number }};
+            const [owner, repo] = process.env.REPO.split('/');
+            const issue_number = parseInt(process.env.ISSUE_NUMBER);
             const comments = await github.issues.listComments({ owner, repo, issue_number });
 
             const jiraRegex = /AST-\d{3,5}/;
@@ -51,11 +60,16 @@ jobs:
 
       - name: Get current Jira status
         id: get_status
+        env:
+          JIRA_URL: https://checkmarx.atlassian.net
+          JIRA_USER_EMAIL: ${{ secrets.AST_JIRA_USER_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.AST_JIRA_API_TOKEN }}
+          JIRA_KEY: ${{ steps.extract_key.outputs.jira_key }}
         run: |
-          RESPONSE=$(curl -s -u "${{ secrets.AST_JIRA_USER_EMAIL }}:${{ secrets.AST_JIRA_API_TOKEN }}" \
+          RESPONSE=$(curl -s -u "${JIRA_USER_EMAIL}:${JIRA_API_TOKEN}" \
             -X GET \
             -H "Accept: application/json" \
-            "${{ env.JIRA_URL }}/rest/api/3/issue/${{ steps.extract_key.outputs.jira_key }}")
+            "${JIRA_URL}/rest/api/3/issue/${JIRA_KEY}")
 
           STATUS=$(echo "$RESPONSE" | jq -r '.fields.status.name')
           echo "Current status is: $STATUS"

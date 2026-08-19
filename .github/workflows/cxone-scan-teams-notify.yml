@@ -51,24 +51,35 @@ jobs:
     name: Notify Teams
     runs-on: cx-public-ubuntu-x64
     if: always()
+    env:
+      REPOSITORY: ${{ inputs.repository }}
+      PR_NUMBER: ${{ inputs.pr_number }}
+      PR_URL: ${{ inputs.pr_url }}
+      CX_RESULT: ${{ inputs.cx_result }}
+      SERVER_URL: ${{ inputs.server_url }}
+      RUN_ID: ${{ inputs.run_id }}
+      REF_NAME: ${{ inputs.ref_name }}
+      ACTOR: ${{ inputs.actor }}
+      EVENT_NAME: ${{ inputs.event_name }}
+      TEAMS_WEBHOOK_URL: ${{ secrets.teams_webhook_url }}
     steps:
       - name: Notify Microsoft Teams
         run: |
-          REPO_NAME="${{ inputs.repository }}"
+          REPO_NAME="${REPOSITORY}"
           REPO_NAME="${REPO_NAME#*/}"
 
-          if [[ -n "${{ inputs.pr_number }}" ]]; then
+          if [[ -n "${PR_NUMBER}" ]]; then
             PR_SECTION=",
                     {
                       \"type\": \"TextBlock\",
-                      \"text\": \"**Pull Request:** [#${{ inputs.pr_number }}](${{ inputs.pr_url }})\",
+                      \"text\": \"**Pull Request:** [#${PR_NUMBER}](${PR_URL})\",
                       \"wrap\": true
                     }"
           else
             PR_SECTION=""
           fi
 
-          if [[ "${{ inputs.cx_result }}" == "success" ]]; then
+          if [[ "${CX_RESULT}" == "success" ]]; then
             COLOR="Good"
             TITLE="✅ ${REPO_NAME} - Checkmarx One Scan Succeeded"
             STATUS_TEXT="The Checkmarx One Scan job completed successfully."
@@ -78,7 +89,7 @@ jobs:
             STATUS_TEXT="The Checkmarx One Scan job failed. Review the run for details."
           fi
 
-          RUN_URL="${{ inputs.server_url }}/${{ inputs.repository }}/actions/runs/${{ inputs.run_id }}"
+          RUN_URL="${SERVER_URL}/${REPOSITORY}/actions/runs/${RUN_ID}"
 
           curl -f -H 'Content-Type: application/json' -d "{
             \"type\": \"message\",
@@ -105,10 +116,10 @@ jobs:
                     {
                       \"type\": \"FactSet\",
                       \"facts\": [
-                        {\"title\": \"Repository:\", \"value\": \"${{ inputs.repository }}\"},
-                        {\"title\": \"Branch:\", \"value\": \"${{ inputs.ref_name }}\"},
-                        {\"title\": \"Triggered By:\", \"value\": \"${{ inputs.actor }}\"},
-                        {\"title\": \"Event:\", \"value\": \"${{ inputs.event_name }}\"}
+                        {\"title\": \"Repository:\", \"value\": \"${REPOSITORY}\"},
+                        {\"title\": \"Branch:\", \"value\": \"${REF_NAME}\"},
+                        {\"title\": \"Triggered By:\", \"value\": \"${ACTOR}\"},
+                        {\"title\": \"Event:\", \"value\": \"${EVENT_NAME}\"}
                       ]
                     }
                     $PR_SECTION
@@ -123,4 +134,4 @@ jobs:
                 }
               }
             ]
-          }" "${{ secrets.teams_webhook_url }}"
+          }" "${TEAMS_WEBHOOK_URL}"

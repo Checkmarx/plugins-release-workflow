@@ -17,15 +17,27 @@ on:
         description: 'Additional information'
         required: false
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
 jobs:
   update-confluence:
+    name: Update Confluence
     runs-on: cx-public-ubuntu-x64
+    env:
+      PRODUCT: ${{ github.event.inputs.product }}
+      VERSION: ${{ github.event.inputs.version }}
+      STATUS: ${{ github.event.inputs.status }}
+      ADDITIONAL_INFO: ${{ github.event.inputs.additional_info }}
     steps:
       - name: Checkout code
         uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5 # v2.7.0
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@e9aba2c848f5ebd159c070c61ea2c4e2b122355e # v2.3.4
@@ -43,7 +55,7 @@ jobs:
           CONFLUENCE_API_TOKEN: ${{ secrets.CONFLUENCE_API_TOKEN }}
         run: |
           python ./.github/scripts/update_confluence.py \
-            "${{ github.event.inputs.product }}" \
-            "${{ github.event.inputs.version }}" \
-            "${{ github.event.inputs.status }}" \
-            "${{ github.event.inputs.additional_info || '' }}"
+            "${PRODUCT}" \
+            "${VERSION}" \
+            "${STATUS}" \
+            "${ADDITIONAL_INFO}"
