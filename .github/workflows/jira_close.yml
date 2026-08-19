@@ -61,6 +61,7 @@ jobs:
       - name: Get current Jira status
         id: get_status
         env:
+          JIRA_URL: https://checkmarx.atlassian.net
           JIRA_USER_EMAIL: ${{ secrets.AST_JIRA_USER_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.AST_JIRA_API_TOKEN }}
           JIRA_KEY: ${{ steps.extract_key.outputs.jira_key }}
@@ -68,7 +69,7 @@ jobs:
           RESPONSE=$(curl -s -u "${JIRA_USER_EMAIL}:${JIRA_API_TOKEN}" \
             -X GET \
             -H "Accept: application/json" \
-            "${{ env.JIRA_URL }}/rest/api/3/issue/${JIRA_KEY}")
+            "${JIRA_URL}/rest/api/3/issue/${JIRA_KEY}")
 
           STATUS=$(echo "$RESPONSE" | jq -r '.fields.status.name')
           echo "Current status is: $STATUS"
