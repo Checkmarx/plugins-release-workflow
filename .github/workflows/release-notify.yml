@@ -35,17 +35,29 @@ on:
       MS_TEAMS_WEBHOOK_URL_SYPHER:
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   notify-teams:
+    name: Notify Teams
     runs-on: cx-public-ubuntu-x64
+    env:
+      INPUT_RELEASE_URL: ${{ inputs.release_url }}
+      INPUT_PRODUCT_NAME: ${{ inputs.product_name }}
+      INPUT_RELEASE_VERSION: ${{ inputs.release_version }}
+      INPUT_CLI_RELEASE_VERSION: ${{ inputs.cli_release_version }}
+      INPUT_JIRA_PRODUCT_NAME: ${{ inputs.jira_product_name }}
 
     steps:
       - name: Fetch Release Notes
         id: fetch_release_notes
         uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410 # v6.4.1
+        env:
+          RELEASE_URL: ${{ inputs.release_url }}
         with:
           script: |
-            const releaseUrl = '${{ inputs.release_url }}';
+            const releaseUrl = process.env.RELEASE_URL;
             const urlPattern = /https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/releases\/tag\/(.+)/;
             const match = releaseUrl.match(urlPattern);
             if (!match) {
@@ -61,17 +73,21 @@ jobs:
 
       - name: Sanitize Release Notes
         id: sanitize_release_notes
+        env:
+          RELEASE_NOTES: ${{ steps.fetch_release_notes.outputs.release_notes }}
         run: |
-          sanitized=$(echo "${{ steps.fetch_release_notes.outputs.release_notes }}" | sed '1{/^<!--/d}')
+          sanitized=$(echo "${RELEASE_NOTES}" | sed '1{/^<!--/d}')
           sanitized=$(echo "$sanitized" | jq -Rs '.')
           echo $sanitized
           echo "sanitized_release_notes=$sanitized" >> $GITHUB_OUTPUT
 
       - name: Extract Contributors
         id: extract_contributors
+        env:
+          RELEASE_NOTES: ${{ steps.fetch_release_notes.outputs.release_notes }}
         run: |
-      
-          contributors=$(echo "${{ steps.fetch_release_notes.outputs.release_notes }}" | grep -o '@[a-zA-Z0-9_-]\+' | sort -u)
+
+          contributors=$(echo "${RELEASE_NOTES}" | grep -o '@[a-zA-Z0-9_-]\+' | sort -u)
           
           echo "Contributors: $contributors"
           
@@ -99,9 +115,11 @@ jobs:
               
       - name: Extract Jira Ticket IDs
         id: extract_jira_tickets
+        env:
+          RELEASE_NOTES: ${{ steps.fetch_release_notes.outputs.release_notes }}
         run: |
           # Extract all AST-XXX patterns
-          jira_tickets=$(echo "${{ steps.fetch_release_notes.outputs.release_notes }}" | grep -oE 'AST-[0-9]+' | sort -u)
+          jira_tickets=$(echo "${RELEASE_NOTES}" | grep -oE 'AST-[0-9]+' | sort -u)
           
           echo "Filtered Jira Tickets:"
           
@@ -230,7 +248,7 @@ jobs:
       - name: Generate Release Version
         id: generate_jira_release_version
         run: |
-          jira_release_version="${{ inputs.jira_product_name }}_${{ inputs.release_version }}"
+          jira_release_version="${INPUT_JIRA_PRODUCT_NAME}_${INPUT_RELEASE_VERSION}"
           echo "Generated Release Version: $jira_release_version"
           echo "jira_release_version=$jira_release_version" >> $GITHUB_OUTPUT
 

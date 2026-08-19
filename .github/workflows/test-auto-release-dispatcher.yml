@@ -28,6 +28,9 @@ on:
         default: false
         type: boolean
 
+permissions:
+  contents: read
+
 jobs:
   test-new-release:
     uses: ./.github/workflows/dispatch-workflow.yml
@@ -37,4 +40,3 @@ jobs:
       is_js_release: ${{ inputs.is_js_release }}
       is_js_runtime_release: ${{ inputs.is_js_runtime_release }}
       is_java_release: ${{ inputs.is_java_release }}
-    secrets: inherit
