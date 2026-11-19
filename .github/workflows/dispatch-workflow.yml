@@ -1,212 +1,177 @@
-name: Dispatch CLI Version Update
+name: Dispatch Plugin Version Update
 
+# Called by the manual "Update dependent plugins" workflow of ast-cli and the
+# three wrappers, after their release is published. Sends a repository_dispatch
+# event to every repo that consumes the released component, waits for the
+# update PRs and lists them in the job summary.
 on:
   workflow_call:
     inputs:
-      is_cli_release:
-        type: boolean
-        default: true
-        description: 'Workflow will update all repos that directly consume the CLI'
-      is_js_release:
-        type: boolean
-        default: false
-        description: 'Workflow will update all repos that directly consume the JavaScript Wrapper'
-      is_js_runtime_release:
-        type: boolean
-        default: false
-        description: 'Workflow will update all repos that directly consume the JavaScript Runtime Wrapper'
-      is_java_release:
-        type: boolean
-        default: false
-        description: 'Workflow will update all repos that directly consume the Java Wrapper'
-      cli_version:
-        description: 'CLI version to update (no input will take latest)'
-        required: false
-        default: ''
-        type: string
-    secrets:
-      DISPATCH_GH_TOKEN:
+      tag:
+        description: 'Published release tag of the calling repo (e.g. 2.3.71 or v0.0.167)'
         required: true
+        type: string
 
 permissions:
   contents: read
 
 jobs:
-  # Group CLI-related updates
-  update_cli_consumers:
-    name: Update CLI Consumers
+  dispatch:
+    name: Dispatch ${{ inputs.tag }} to consumers
     runs-on: cx-public-ubuntu-x64
-    if: ${{ inputs.is_cli_release == true }}
-    strategy:
-      matrix:
-        repo: [
-          { org: 'CheckmarxDev', name: 'ast-cli-java-wrapper' },
-          { org: 'Checkmarx', name: 'ast-github-action' },
-          { org: 'CheckmarxDev', name: 'ast-cli-javascript-wrapper' },
-          { org: 'CheckmarxDev', name: 'ast-cli-javascript-wrapper-runtime-cli' },
-          { org: 'Checkmarx', name: 'ast-teamcity-plugin' },
-          { org: 'Checkmarx', name: 'ast-visual-studio-extension' }
-        ]
-    steps:
-      - name: Check Out Repository
-        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
-        with:
-          persist-credentials: false
-
-      - name: Check Out External Repository
-        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
-        with:
-          repository: Checkmarx/plugins-release-workflow
-          path: plugins-release-workflow
-          persist-credentials: false
-
-      - name: Set Up Python
-        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
-        with:
-          python-version: '3.x'
-
-      - name: Install Dependencies
+    environment: release
+    timeout-minutes: 30
+    permissions:
+      contents: read  # read the calling repo's release
+      id-token: write  # for configure-aws-credentials to assume the AWS role via OIDC
+    concurrency:
+      group: plugins-dispatch-${{ github.repository }}-${{ inputs.tag }}
+      cancel-in-progress: false
+    defaults:
+      run:
         shell: bash
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests
-
-      - name: Trigger Update Event on ${{ matrix.repo.name }}
-        env:
-          GH_ORG: ${{ matrix.repo.org }}
-          GH_REPO: ${{ matrix.repo.name }}
-          CLI_VERSION: ${{ inputs.cli_version }}
-          IS_CLI_RELEASE: 'true'
-          GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
-        run: python plugins-release-workflow/.github/scripts/dispatch_new_version_event.py
-
-  # Group JavaScript Wrapper-related updates
-  update_js_wrapper_consumers:
-    name: Update JavaScript Wrapper Consumers
-    runs-on: cx-public-ubuntu-x64
-    if: ${{ inputs.is_js_release == true }}
-    strategy:
-      matrix:
-        repo: [
-          { org: 'Checkmarx', name: 'ast-vscode-extension' }
-        ]
+    env:
+      TAG: ${{ inputs.tag }}
     steps:
-      - name: Check Out Repository
-        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
-        with:
-          persist-credentials: false
-
-      - name: Check Out External Repository
-        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
-        with:
-          repository: Checkmarx/plugins-release-workflow
-          path: plugins-release-workflow
-          persist-credentials: false
-
-      - name: Set Up Python
-        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
-        with:
-          python-version: '3.x'
-
-      - name: Install Dependencies
-        shell: bash
+      - name: Resolve consumers
+        id: targets
         run: |
-          python -m pip install --upgrade pip
-          pip install requests
+          if [ "${GITHUB_REF_NAME}" != "main" ]; then
+            echo "::error::Run this workflow from main (current ref: ${GITHUB_REF_NAME})."
+            exit 1
+          fi
+          if ! [[ "${TAG}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::'${TAG}' is not a release tag (expected 1.2.3 or v1.2.3)."
+            exit 1
+          fi
+          case "${GITHUB_REPOSITORY}" in
+            Checkmarx/ast-cli)
+              event=cli-version-update
+              repos=ast-cli-java-wrapper,ast-cli-javascript-wrapper,ast-cli-javascript-wrapper-runtime-cli,ast-github-action,ast-teamcity-plugin,ast-visual-studio-extension ;;
+            Checkmarx/ast-cli-javascript-wrapper)
+              event=js-wrapper-version-update
+              repos=ast-vscode-extension ;;
+            Checkmarx/ast-cli-javascript-wrapper-runtime-cli)
+              event=js-runtime-wrapper-version-update
+              repos=ast-azure-plugin ;;
+            Checkmarx/ast-cli-java-wrapper)
+              event=java-wrapper-version-update
+              repos=ast-eclipse-plugin,ast-jetbrains-plugin,ast-cli-maven-plugin ;;
+            *)
+              echo "::error::${GITHUB_REPOSITORY} has no consumers configured."
+              exit 1 ;;
+          esac
+          {
+            echo "event=${event}"
+            echo "repos=${repos}"
+          } >> "${GITHUB_OUTPUT}"
 
-      - name: Trigger Update Event on ${{ matrix.repo.name }}
+      - name: Check the release is published and immutable
         env:
-          GH_ORG: ${{ matrix.repo.org }}
-          GH_REPO: ${{ matrix.repo.name }}
-          CLI_VERSION: ${{ inputs.cli_version }}
-          IS_JS_RELEASE: 'true'
-          GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
-        run: python plugins-release-workflow/.github/scripts/dispatch_new_version_event.py
-
-  # Group JavaScript Runtime Wrapper-related updates
-  update_js_runtime_wrapper_consumers:
-    name: Update JavaScript Runtime Wrapper Consumers
-    runs-on: cx-public-ubuntu-x64
-    if: ${{ inputs.is_js_runtime_release == true }}
-    strategy:
-      matrix:
-        repo: [
-          { org: 'Checkmarx', name: 'ast-azure-plugin' }
-        ]
-    steps:
-      - name: Check Out Repository
-        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
-        with:
-          persist-credentials: false
-
-      - name: Check Out External Repository
-        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
-        with:
-          repository: Checkmarx/plugins-release-workflow
-          path: plugins-release-workflow
-          persist-credentials: false
-
-      - name: Set Up Python
-        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
-        with:
-          python-version: '3.x'
-
-      - name: Install Dependencies
-        shell: bash
+          GH_TOKEN: ${{ github.token }}
         run: |
-          python -m pip install --upgrade pip
-          pip install requests
+          if ! release=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" 2>/dev/null); then
+            echo "::error::No published release ${TAG} in ${GITHUB_REPOSITORY}. Publish the release first (drafts are not accepted)."
+            exit 1
+          fi
+          if [ "$(jq -r '.draft or .prerelease' <<< "${release}")" != "false" ]; then
+            echo "::error::Release ${TAG} is a draft or a pre-release."
+            exit 1
+          fi
+          if [ "$(jq -r '.immutable' <<< "${release}")" != "true" ]; then
+            echo "::error::Release ${TAG} is not immutable yet."
+            exit 1
+          fi
+          echo "Release ${TAG} is published and immutable."
 
-      - name: Trigger Update Event on ${{ matrix.repo.name }}
-        env:
-          GH_ORG: ${{ matrix.repo.org }}
-          GH_REPO: ${{ matrix.repo.name }}
-          CLI_VERSION: ${{ inputs.cli_version }}
-          IS_JS_RUNTIME_RELEASE: 'true'
-          GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
-        run: python plugins-release-workflow/.github/scripts/dispatch_new_version_event.py
-
-  # Group Java Wrapper-related updates
-  update_java_wrapper_consumers:
-    name: Update Java Wrapper Consumers
-    runs-on: cx-public-ubuntu-x64
-    if: ${{ inputs.is_java_release == true }}
-    strategy:
-      matrix:
-        repo: [
-          { org: 'Checkmarx', name: 'ast-jetbrains-plugin' },
-          { org: 'Checkmarx', name: 'ast-eclipse-plugin' },
-          { org: 'jenkinsci', name: 'checkmarx-ast-scanner-plugin' }
-        ]
-    steps:
-      - name: Check Out Repository
-        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
+      - name: Configure AWS credentials
+        uses: step-security/configure-aws-credentials@1448016543d4432bd608e0de7871c7bf9e9be925 # v6.2.1
         with:
-          persist-credentials: false
+          role-to-assume: ${{ secrets.PLUGINS_APP_ROLE_ARN }}
+          aws-region: ${{ secrets.PLUGINS_APP_AWS_REGION }}
+          role-session-name: plugins-release-dispatch
 
-      - name: Check Out External Repository
-        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
+      - name: Fetch GitHub App private key
+        uses: step-security/aws-secretsmanager-get-secrets@102b6b2a2528747bcc321bb99ef326d8be7ef58f # v3.0.1
         with:
-          repository: Checkmarx/plugins-release-workflow
-          path: plugins-release-workflow
-          persist-credentials: false
+          secret-ids: PLUGINS_APP_KEY,${{ secrets.PLUGINS_APP_SECRET_NAME }}
 
-      - name: Set Up Python
-        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
-        with:
-          python-version: '3.x'
-
-      - name: Install Dependencies
-        shell: bash
+      - name: Mask each line of the private key
         run: |
-          python -m pip install --upgrade pip
-          pip install requests
+          while IFS= read -r line; do
+            line="${line%$'\r'}"
+            if [ -n "${line}" ]; then
+              echo "::add-mask::${line}"
+            fi
+          done <<< "${PLUGINS_APP_KEY}"
 
-      - name: Trigger Update Event on ${{ matrix.repo.name }}
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.PLUGINS_APP_CLIENT_ID }}
+          private-key: ${{ env.PLUGINS_APP_KEY }}
+          owner: Checkmarx
+          repositories: ${{ steps.targets.outputs.repos }}
+          permission-contents: write  # send repository_dispatch events
+          permission-pull-requests: read  # find the update PRs
+
+      - name: Remove the private key from the environment
+        run: echo "PLUGINS_APP_KEY=" >> "${GITHUB_ENV}"
+
+      - name: Send ${{ steps.targets.outputs.event }} events
         env:
-          GH_ORG: ${{ matrix.repo.org }}
-          GH_REPO: ${{ matrix.repo.name }}
-          CLI_VERSION: ${{ inputs.cli_version }}
-          IS_JAVA_RELEASE: 'true'
-          GITHUB_TOKEN: ${{ secrets.DISPATCH_GH_TOKEN }}
-        run: python plugins-release-workflow/.github/scripts/dispatch_new_version_event.py
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          EVENT: ${{ steps.targets.outputs.event }}
+          REPOS: ${{ steps.targets.outputs.repos }}
+        run: |
+          IFS=',' read -ra targets <<< "${REPOS}"
+          for repo in "${targets[@]}"; do
+            gh api -X POST "repos/Checkmarx/${repo}/dispatches" \
+              -f event_type="${EVENT}" \
+              -f "client_payload[version]=${TAG}" \
+              -f "client_payload[source_repo]=${GITHUB_REPOSITORY}" > /dev/null
+            echo "Sent ${EVENT} ${TAG} to Checkmarx/${repo}"
+          done
+
+      - name: Wait for the update PRs
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPOS: ${{ steps.targets.outputs.repos }}
+          BOT: ${{ steps.app-token.outputs.app-slug }}[bot]
+        run: |
+          version="${TAG#v}"
+          IFS=',' read -ra targets <<< "${REPOS}"
+          declare -A pr=()
+          for attempt in $(seq 1 40); do
+            for repo in "${targets[@]}"; do
+              if [ -z "${pr[${repo}]:-}" ]; then
+                url=$(gh api "repos/Checkmarx/${repo}/pulls?state=open&per_page=100" \
+                  --jq "[.[] | select(.user.login == \"${BOT}\" and (.head.ref | contains(\"${version}\")))][0].html_url // empty")
+                if [ -n "${url}" ]; then
+                  pr[${repo}]="${url}"
+                fi
+              fi
+            done
+            if [ "${#pr[@]}" -eq "${#targets[@]}" ]; then
+              break
+            fi
+            echo "Attempt ${attempt}: ${#pr[@]}/${#targets[@]} PRs found, waiting 30s"
+            sleep 30
+          done
+          {
+            echo "### Update PRs for ${GITHUB_REPOSITORY} ${TAG}"
+            echo ""
+            echo "Each PR merges automatically after 2 approvals from cx-maintainers."
+            echo ""
+            echo "| Repository | Pull request |"
+            echo "|---|---|"
+            for repo in "${targets[@]}"; do
+              echo "| ${repo} | ${pr[${repo}]:-not found} |"
+            done
+          } >> "${GITHUB_STEP_SUMMARY}"
+          missing=$(( ${#targets[@]} - ${#pr[@]} ))
+          if [ "${missing}" -gt 0 ]; then
+            echo "::error::${missing} update PR(s) did not appear within 20 minutes. Check the update workflow runs in the repos marked 'not found'."
+            exit 1
+          fi
