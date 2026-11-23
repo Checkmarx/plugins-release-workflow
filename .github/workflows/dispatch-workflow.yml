@@ -20,7 +20,7 @@ jobs:
     name: Dispatch ${{ inputs.tag }} to consumers
     runs-on: cx-public-ubuntu-x64
     environment: release
-    timeout-minutes: 30
+    timeout-minutes: 60  # up to 30 min for Maven Central + up to 20 min for the PRs
     permissions:
       contents: read  # read the calling repo's release
       id-token: write  # for configure-aws-credentials to assume the AWS role via OIDC
@@ -83,6 +83,24 @@ jobs:
             exit 1
           fi
           echo "Release ${TAG} is published and immutable."
+
+      # Eclipse, JetBrains and the Maven plugin take the jar from Maven Central,
+      # which can show a new version up to ~30 minutes after the release.
+      - name: Wait for the Java wrapper on Maven Central
+        if: github.repository == 'Checkmarx/ast-cli-java-wrapper'
+        run: |
+          version="${TAG#v}"
+          url="https://repo1.maven.org/maven2/com/checkmarx/ast/ast-cli-java-wrapper/${version}/ast-cli-java-wrapper-${version}.jar"
+          for attempt in $(seq 1 60); do
+            if curl -fsIL -o /dev/null "${url}"; then
+              echo "ast-cli-java-wrapper ${version} is on Maven Central."
+              exit 0
+            fi
+            echo "Attempt ${attempt}: ${version} is not on Maven Central yet, waiting 30s"
+            sleep 30
+          done
+          echo "::error::ast-cli-java-wrapper ${version} did not appear on Maven Central within 30 minutes. Run this workflow again later."
+          exit 1
 
       - name: Configure AWS credentials
         uses: step-security/configure-aws-credentials@1448016543d4432bd608e0de7871c7bf9e9be925 # v6.2.1
