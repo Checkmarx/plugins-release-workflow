@@ -7,6 +7,7 @@ Automates the release workflow across all components, starting with the CLI, fol
 and `ast-cli-javascript-wrapper-runtime-cli`. It:
 1. runs in the caller's `release` environment, from `main` only;
 2. refuses a release that is a draft, a pre-release or not immutable;
+   for a Java wrapper release, waits (up to 30 minutes) until the jar is on Maven Central;
 3. sends a `repository_dispatch` event (`client_payload.version` = the tag) to every consumer repo;
 4. waits for the update PRs and lists them in the job summary.
 
