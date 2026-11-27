@@ -37,7 +37,7 @@ permissions:
 
 jobs:
   test-notify:
-    uses: ./.github/workflows/release-notify.yml
+    uses: $/.github/workflows/release-notify.yml
     with:
       product_name: ${{ github.event.inputs.product_name }}
       release_version: ${{ github.event.inputs.release_version }}
