@@ -1,0 +1,1154 @@
+# =============================================================================
+# Reusable Go release workflow (GoReleaser based)
+#
+# Generalised from Checkmarx/ast-cli .github/workflows/release.yml so that any Go
+# application in the Checkmarx public org (same runners, AWS Secrets Manager,
+# Docker Hub OIDC, S3 bucket, Cosign key) can release with the same flow:
+#
+#   preflight -> build (GoReleaser, macOS runner, optional gon notarization)
+#             -> draft GitHub release + assets
+#             -> [optional] human-in-the-loop Windows signing gate
+#             -> [optional] Docker build / push / Cosign sign
+#             -> [optional] S3 upload (<prefix>/<tag> and <prefix>/latest)
+#             -> [optional] publish release (draft -> published)
+#             -> [optional] Homebrew tap, Teams/JIRA notify, plugin dispatch
+#             -> cleanup draft on failure
+#
+# ---------------------------------------------------------------------------
+# PREREQUISITES (caller repository)
+#   * This file must live in `.github/workflows/` of a repo the callers can
+#     reach (public repo, or Actions access sharing enabled for the org).
+#   * Caller passes `secrets: inherit` (same org) and grants the calling job
+#       permissions: { contents: write, id-token: write }
+#   * Caller GoReleaser config (default .goreleaser.yml) must give every build
+#     an explicit `id` and `goos` list. The workflow derives an "effective"
+#     config at runtime: it filters `goos` to the selected platforms, drops
+#     unused archives/universal_binaries, removes blobs/brews/dockers (handled
+#     by this workflow), and strips the gon/DMG hook when macOS signing is off.
+#   * Go >= 1.24 when ECHO_LIBRARIES_ACCESS_KEY is used (credentials are passed
+#     through GOAUTH instead of being embedded in the GOPROXY URL).
+#   * Environments in the caller repo:
+#       - `release`          (build job; holds release secrets, as today)
+#       - `windows-signing`  (REQUIRED REVIEWERS = the people who sign Windows)
+#   * Secrets (repo/org/environment level; all optional unless the feature is on):
+#       STEP_SECURITY_API_KEY, ECHO_LIBRARIES_ACCESS_KEY,
+#       SECRET_MANAGER_ROLE_ARN, SECRET_MANAGER_AWS_REGION, SECRET_MANAGER_SECRET_NAME
+#         (JSON secret with APPLE_DEVELOPER_CERTIFICATE_P12_BASE64,
+#          APPLE_DEVELOPER_CERTIFICATE_PASSWORD, AC_USER, AC_PASSWORD, ...;
+#          plus cosign/private_key, cosign/public_key, cosign/password),
+#       AWS_ASSUME_ROLE_ARN, AWS_ASSUME_ROLE_REGION, S3_BUCKET_NAME,
+#       DOCKERHUB_OIDC_CONNECTIONID, GO_BOT_TOKEN (Homebrew tap write access)
+#
+# ---------------------------------------------------------------------------
+# WINDOWS SIGNING RUNBOOK (sign_windows: true)
+#   1. Wait for the "Draft GitHub release" job; its summary lists the files.
+#   2. Download the `windows-unsigned` artifact from the workflow run page.
+#   3. Sign each .exe offline with the Checkmarx code-signing certificate.
+#   4. Upload each signed file to the DRAFT release, renamed with the prefix
+#      `signed-` (e.g. windows_amd64-cx.exe -> signed-windows_amd64-cx.exe).
+#   5. Approve the pending `windows-signing` deployment on the run page.
+#   The workflow verifies the Authenticode signature + signer subject,
+#   re-packs the Windows zips, regenerates checksums and removes the
+#   `signed-*` drop-off assets. Rejecting the deployment aborts the release
+#   and the draft is deleted.
+# =============================================================================
+name: Go Release (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      # ---- identity -------------------------------------------------------
+      tag:
+        description: "Release tag, e.g. 2.3.41 or v1.2.0"
+        required: true
+        type: string
+      dev:
+        description: "Dev build: uses the dev GoReleaser config and marks the release as prerelease"
+        type: boolean
+        default: true
+      release_name_prefix:
+        description: "Release title prefix (title = '<prefix> <tag>'). Defaults to the repository name"
+        type: string
+        default: ""
+      goreleaser_config:
+        type: string
+        default: ".goreleaser.yml"
+      goreleaser_dev_config:
+        type: string
+        default: ".goreleaser-dev.yml"
+      goreleaser_version:
+        type: string
+        default: "v1.18.2"
+      go_version_file:
+        type: string
+        default: "go.mod"
+      build_environment:
+        description: "GitHub environment used by the build job"
+        type: string
+        default: "release"
+      # ---- platforms ------------------------------------------------------
+      build_linux:
+        type: boolean
+        default: true
+      build_windows:
+        type: boolean
+        default: true
+      build_macos:
+        type: boolean
+        default: true
+      # ---- signing --------------------------------------------------------
+      sign_macos:
+        description: "Codesign + notarize macOS via the gon hook in the GoReleaser config"
+        type: boolean
+        default: true
+      sign_windows:
+        description: "Human-in-the-loop Windows signing (requires create_release)"
+        type: boolean
+        default: true
+      windows_signing_environment:
+        description: "Environment with required reviewers that gates Windows signing"
+        type: string
+        default: "windows-signing"
+      windows_signer_subject:
+        description: "Substring that must appear in the Authenticode signer subject"
+        type: string
+        default: "Checkmarx"
+      # ---- docker ---------------------------------------------------------
+      create_docker:
+        type: boolean
+        default: false
+      publish_docker:
+        type: boolean
+        default: false
+      sign_docker:
+        type: boolean
+        default: false
+      docker_image:
+        description: "Image repository, e.g. checkmarx/ast-cli"
+        type: string
+        default: ""
+      docker_tag_latest:
+        type: boolean
+        default: true
+      dockerfile:
+        type: string
+        default: "Dockerfile"
+      docker_binary_path:
+        description: "Linux binary (inside dist/) copied into the Docker build context"
+        type: string
+        default: "dist/cx_linux_amd64_v1/cx"
+      docker_binary_name:
+        description: "File name the Dockerfile COPYs from the build context"
+        type: string
+        default: "cx"
+      dockerhub_username:
+        type: string
+        default: ""
+      # ---- github release -------------------------------------------------
+      create_release:
+        description: "Create a DRAFT GitHub release and attach assets"
+        type: boolean
+        default: true
+      publish_release:
+        description: "Flip the draft to published (creates the git tag)"
+        type: boolean
+        default: false
+      release_asset_globs:
+        description: "Space-separated globs of release assets"
+        type: string
+        default: "dist/*.tar.gz dist/*.zip dist/*checksums*"
+      # ---- s3 -------------------------------------------------------------
+      upload_s3:
+        type: boolean
+        default: false
+      s3_prefix:
+        description: "S3 key prefix, e.g. CxOne/CLI"
+        type: string
+        default: ""
+      s3_versioned_archive_ids:
+        description: "Comma-separated GoReleaser archive ids uploaded to <prefix>/<tag>/"
+        type: string
+        default: ""
+      s3_latest_archive_ids:
+        description: "Comma-separated GoReleaser archive ids uploaded to <prefix>/latest/ (empty = skip)"
+        type: string
+        default: ""
+      # ---- homebrew -------------------------------------------------------
+      update_homebrew:
+        type: boolean
+        default: false
+      homebrew_tap_repo:
+        description: "owner/repo of the tap, e.g. checkmarx/homebrew-ast-cli"
+        type: string
+        default: ""
+      homebrew_formula_template:
+        description: "envsubst template in the caller repo (vars: VERSION TAG RELEASE_URL SHA256_<GOOS>_<GOARCH> URL_<GOOS>_<GOARCH>)"
+        type: string
+        default: ""
+      homebrew_formula_path:
+        description: "Formula path inside the tap, e.g. Formula/cx.rb"
+        type: string
+        default: ""
+      homebrew_archive_ids:
+        description: "Comma-separated archive ids used for Homebrew sha256/url variables"
+        type: string
+        default: ""
+      # ---- notify / dispatch ---------------------------------------------
+      notify:
+        description: "Teams + JIRA notification (plugins-release-workflow/release-notify.yml)"
+        type: boolean
+        default: false
+      dispatch_plugins:
+        description: "Dispatch new version to downstream plugins (plugins-release-workflow/dispatch-workflow.yml)"
+        type: boolean
+        default: false
+      product_name:
+        type: string
+        default: ""
+      jira_product_name:
+        type: string
+        default: ""
+      release_author:
+        type: string
+        default: ""
+      # ---- runners --------------------------------------------------------
+      macos_runner:
+        type: string
+        default: "cx-public-macos-15-x64"
+      linux_runner:
+        type: string
+        default: "cx-public-ubuntu-x64"
+    secrets:
+      STEP_SECURITY_API_KEY:
+        required: false
+      ECHO_LIBRARIES_ACCESS_KEY:
+        required: false
+      SECRET_MANAGER_ROLE_ARN:
+        required: false
+      SECRET_MANAGER_AWS_REGION:
+        required: false
+      SECRET_MANAGER_SECRET_NAME:
+        required: false
+      AWS_ASSUME_ROLE_ARN:
+        required: false
+      AWS_ASSUME_ROLE_REGION:
+        required: false
+      S3_BUCKET_NAME:
+        required: false
+      DOCKERHUB_OIDC_CONNECTIONID:
+        required: false
+      GO_BOT_TOKEN:
+        required: false
+    outputs:
+      release_url:
+        description: "URL of the GitHub release (draft or published)"
+        value: ${{ jobs.draft-release.outputs.release_url }}
+      docker_digest:
+        description: "Pushed image digest (sha256:...)"
+        value: ${{ jobs.docker.outputs.digest }}
+
+# Distinct from any caller-level group (same group in caller + callee deadlocks).
+concurrency:
+  group: go-release-${{ github.repository }}-${{ inputs.tag }}
+  cancel-in-progress: false
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # ---------------------------------------------------------------------------
+  preflight:
+    name: Validate inputs
+    runs-on: ${{ inputs.linux_runner }}
+    permissions:
+      contents: read
+    outputs:
+      goos: ${{ steps.validate.outputs.goos }}
+    steps:
+      - name: Install Harden Runner
+        uses: checkmarx/harden-runner-action@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          use-policy-store: true
+          api-key: ${{ secrets.STEP_SECURITY_API_KEY }}
+
+      - name: Validate toggles and tag
+        id: validate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          BUILD_LINUX: ${{ inputs.build_linux }}
+          BUILD_WINDOWS: ${{ inputs.build_windows }}
+          BUILD_MACOS: ${{ inputs.build_macos }}
+          SIGN_MACOS: ${{ inputs.sign_macos }}
+          SIGN_WINDOWS: ${{ inputs.sign_windows }}
+          CREATE_DOCKER: ${{ inputs.create_docker }}
+          PUBLISH_DOCKER: ${{ inputs.publish_docker }}
+          SIGN_DOCKER: ${{ inputs.sign_docker }}
+          DOCKER_IMAGE: ${{ inputs.docker_image }}
+          DOCKERHUB_USERNAME: ${{ inputs.dockerhub_username }}
+          CREATE_RELEASE: ${{ inputs.create_release }}
+          PUBLISH_RELEASE: ${{ inputs.publish_release }}
+          UPLOAD_S3: ${{ inputs.upload_s3 }}
+          S3_PREFIX: ${{ inputs.s3_prefix }}
+          S3_IDS: ${{ inputs.s3_versioned_archive_ids }}
+          UPDATE_HOMEBREW: ${{ inputs.update_homebrew }}
+          HOMEBREW_TAP: ${{ inputs.homebrew_tap_repo }}
+          HOMEBREW_TEMPLATE: ${{ inputs.homebrew_formula_template }}
+          HOMEBREW_PATH: ${{ inputs.homebrew_formula_path }}
+          HOMEBREW_IDS: ${{ inputs.homebrew_archive_ids }}
+          NOTIFY: ${{ inputs.notify }}
+          DISPATCH: ${{ inputs.dispatch_plugins }}
+        run: |
+          set -euo pipefail
+          errors=()
+          # requires <flag> <dependency> <message>
+          requires() { if [ "$1" = "true" ] && [ "$2" != "true" ]; then errors+=("$3"); fi; }
+          # needs_value <flag> <value> <message>
+          needs_value() { if [ "$1" = "true" ] && [ -z "$2" ]; then errors+=("$3"); fi; }
+
+          goos=()
+          [ "$BUILD_LINUX" = "true" ]   && goos+=("linux")
+          [ "$BUILD_WINDOWS" = "true" ] && goos+=("windows")
+          [ "$BUILD_MACOS" = "true" ]   && goos+=("darwin")
+          [ "${#goos[@]}" -gt 0 ] || errors+=("Select at least one platform (build_linux/build_windows/build_macos).")
+
+          requires "$SIGN_MACOS"      "$BUILD_MACOS"    "sign_macos requires build_macos."
+          requires "$SIGN_WINDOWS"    "$BUILD_WINDOWS"  "sign_windows requires build_windows."
+          requires "$SIGN_WINDOWS"    "$CREATE_RELEASE" "sign_windows requires create_release (the draft release is the signed-file drop-off)."
+          requires "$CREATE_DOCKER"   "$BUILD_LINUX"    "create_docker requires build_linux."
+          requires "$PUBLISH_DOCKER"  "$CREATE_DOCKER"  "publish_docker requires create_docker."
+          requires "$SIGN_DOCKER"     "$PUBLISH_DOCKER" "sign_docker requires publish_docker (Cosign signs the pushed digest)."
+          requires "$PUBLISH_RELEASE" "$CREATE_RELEASE" "publish_release requires create_release."
+          requires "$UPDATE_HOMEBREW" "$PUBLISH_RELEASE" "update_homebrew requires publish_release."
+          requires "$NOTIFY"          "$PUBLISH_RELEASE" "notify requires publish_release."
+          requires "$DISPATCH"        "$PUBLISH_RELEASE" "dispatch_plugins requires publish_release."
+
+          needs_value "$CREATE_DOCKER"   "$DOCKER_IMAGE"       "create_docker requires docker_image."
+          needs_value "$PUBLISH_DOCKER"  "$DOCKERHUB_USERNAME" "publish_docker requires dockerhub_username."
+          needs_value "$UPLOAD_S3"       "$S3_PREFIX"          "upload_s3 requires s3_prefix."
+          needs_value "$UPLOAD_S3"       "$S3_IDS"             "upload_s3 requires s3_versioned_archive_ids."
+          needs_value "$UPDATE_HOMEBREW" "$HOMEBREW_TAP"       "update_homebrew requires homebrew_tap_repo."
+          needs_value "$UPDATE_HOMEBREW" "$HOMEBREW_TEMPLATE"  "update_homebrew requires homebrew_formula_template."
+          needs_value "$UPDATE_HOMEBREW" "$HOMEBREW_PATH"      "update_homebrew requires homebrew_formula_path."
+          needs_value "$UPDATE_HOMEBREW" "$HOMEBREW_IDS"       "update_homebrew requires homebrew_archive_ids."
+
+          if [[ ! "$TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            errors+=("Tag '$TAG' is not a semantic version (e.g. 2.3.41, v1.2.0, 1.2.0-rc.1).")
+          elif gh api "repos/${REPO}/git/ref/tags/${TAG}" >/dev/null 2>&1; then
+            errors+=("Tag '$TAG' already exists in ${REPO}.")
+          fi
+
+          if [ "${#errors[@]}" -gt 0 ]; then
+            printf '::error::%s\n' "${errors[@]}"
+            exit 1
+          fi
+          selected="$(IFS=,; echo "${goos[*]}")"
+          echo "goos=${selected}" >> "$GITHUB_OUTPUT"
+          echo "Validated. Platforms: ${selected}" >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build (GoReleaser)
+    needs: preflight
+    runs-on: ${{ inputs.macos_runner }}
+    environment: ${{ inputs.build_environment }}
+    permissions:
+      contents: read
+      id-token: write # AWS OIDC for Secrets Manager
+    env:
+      # Credential-free proxy URL; the access key is supplied via GOAUTH below.
+      GOPROXY: ${{ secrets.ECHO_LIBRARIES_ACCESS_KEY != '' && 'https://golang.echohq.com' || 'https://proxy.golang.org,direct' }}
+      HAS_ECHO_KEY: ${{ secrets.ECHO_LIBRARIES_ACCESS_KEY != '' }}
+      HAS_SECRET_MANAGER: ${{ secrets.SECRET_MANAGER_ROLE_ARN != '' }}
+      MAC_SIGN: ${{ inputs.build_macos && inputs.sign_macos }}
+    steps:
+      - name: Install Harden Runner
+        uses: checkmarx/harden-runner-action@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          use-policy-store: true
+          api-key: ${{ secrets.STEP_SECURITY_API_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Go
+        uses: actions/setup-go@4d34df0c2316fe8122ab82dc22947d607c0c91f9 # v4
+        with:
+          go-version-file: ${{ inputs.go_version_file }}
+
+      - name: Configure Go proxy credentials (GOAUTH)
+        if: env.HAS_ECHO_KEY == 'true'
+        env:
+          ECHO_KEY: ${{ secrets.ECHO_LIBRARIES_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          dir="${RUNNER_TEMP}/goauth"
+          mkdir -p "$dir"
+          # HTTP Basic auth with an empty username and the access key as the password,
+          # served to the go command through a GOAUTH helper instead of the proxy URL.
+          b64="$(printf ':%s' "$ECHO_KEY" | base64 | tr -d '\n')"
+          echo "::add-mask::${b64}"
+          printf 'https://golang.echohq.com\n\nAuthorization: Basic %s\n\n' "$b64" > "${dir}/credentials"
+          printf '#!/bin/sh\ncat "%s"\n' "${dir}/credentials" > "${dir}/goauth.sh"
+          chmod 700 "${dir}/goauth.sh"
+          echo "GOAUTH=command ${dir}/goauth.sh" >> "$GITHUB_ENV"
+
+      - name: Configure AWS Credentials for Secrets Manager
+        if: env.HAS_SECRET_MANAGER == 'true'
+        uses: step-security/configure-aws-credentials@169c21e4c75dca522fb69a37bfdb5d8d634b9da4 # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.SECRET_MANAGER_ROLE_ARN }}
+          aws-region: ${{ secrets.SECRET_MANAGER_AWS_REGION }}
+          role-session-name: release-build-secrets
+
+      - name: Fetch secrets from AWS Secrets Manager
+        if: env.HAS_SECRET_MANAGER == 'true'
+        uses: step-security/aws-secretsmanager-get-secrets@102b6b2a2528747bcc321bb99ef326d8be7ef58f # v3.0.1
+        with:
+          secret-ids: |
+            ,${{ secrets.SECRET_MANAGER_SECRET_NAME }}
+          parse-json-secrets: true
+
+      - name: Import Code-Signing Certificates
+        if: env.MAC_SIGN == 'true'
+        uses: Apple-Actions/import-codesign-certs@253ddeeac23f2bdad1646faac5c8c2832e800071 # v1
+        with:
+          p12-file-base64: ${{ env.APPLE_DEVELOPER_CERTIFICATE_P12_BASE64 }}
+          p12-password: ${{ env.APPLE_DEVELOPER_CERTIFICATE_PASSWORD }}
+
+      - name: Install gon
+        if: env.MAC_SIGN == 'true'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_UPGRADE: "1"
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: "1"
+        run: brew install Bearer/tap/gon
+
+      - name: Install yq
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_UPGRADE: "1"
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: "1"
+        run: |
+          set -euo pipefail
+          if ! yq --version 2>/dev/null | grep -q 'mikefarah'; then
+            brew install yq
+          fi
+          yq --version
+
+      - name: Create local tag (consumed by GoReleaser)
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          git tag -a "${TAG}" -m "Release ${TAG}"
+          # The remote tag is created by GitHub when the draft release is published.
+
+      - name: Generate effective GoReleaser config
+        env:
+          DEV: ${{ inputs.dev }}
+          CONFIG: ${{ inputs.goreleaser_config }}
+          DEV_CONFIG: ${{ inputs.goreleaser_dev_config }}
+          SELECTED_GOOS: ${{ needs.preflight.outputs.goos }}
+        run: |
+          set -euo pipefail
+          src="$CONFIG"
+          [ "$DEV" = "true" ] && src="$DEV_CONFIG"
+          [ -f "$src" ] || { echo "::error::GoReleaser config '$src' not found"; exit 1; }
+          # Written outside the workspace: an untracked file would make GoReleaser see a dirty git tree.
+          out="${RUNNER_TEMP}/goreleaser.effective.yml"
+          export SELECTED_GOOS
+
+          yq '
+            (strenv(SELECTED_GOOS) | split(",")) as $sel
+            | .builds |= map(.goos |= map(select(. as $g | $sel | any_c(. == $g))))
+            | .builds |= map(select((.goos | length) > 0))
+            | [.builds[].id] as $ids
+            | .archives = ((.archives // [])
+                | map(.builds = ((.builds // []) | map(select(. as $b | $ids | any_c(. == $b)))))
+                | map(select((.builds | length) > 0)))
+            | .universal_binaries = ((.universal_binaries // []) | map(select(.id as $u | $ids | any_c(. == $u))))
+            | del(.blobs) | del(.brews) | del(.dockers) | del(.docker_manifests)
+            | .changelog = {"skip": true}
+          ' "$src" > "$out"
+
+          if [ "$MAC_SIGN" != "true" ]; then
+            # No gon: drop the notarization hook and any DMG that hook would have produced.
+            yq -i '
+              del(.universal_binaries[].hooks)
+              | .archives |= map(.files = ((.files // []) | map(select(tag != "!!str" or (test("\\.dmg$") | not)))))
+            ' "$out"
+          fi
+
+          echo "GR_CONFIG=${out}" >> "$GITHUB_ENV"
+          {
+            echo "### Effective GoReleaser config (source: \`${src}\`)"
+            echo '```yaml'
+            cat "$out"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build GoReleaser args
+        run: |
+          set -euo pipefail
+          # Publishing (GitHub release, S3, Homebrew, Docker) is done by later jobs,
+          # after the optional Windows signing gate.
+          echo "GR_ARGS=release --clean --debug --timeout 90m --skip-publish --skip-docker --config ${GR_CONFIG}" >> "$GITHUB_ENV"
+
+      - name: Check GoReleaser config
+        uses: step-security/goreleaser-action@1472c46ac6e641f2b929f1a893354288b3a6b6b6 # v7.2.1
+        with:
+          version: ${{ inputs.goreleaser_version }}
+          args: check --config ${{ env.GR_CONFIG }}
+
+      - name: Run GoReleaser
+        uses: step-security/goreleaser-action@1472c46ac6e641f2b929f1a893354288b3a6b6b6 # v7.2.1
+        with:
+          version: ${{ inputs.goreleaser_version }}
+          args: ${{ env.GR_ARGS }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Collect unsigned Windows binaries
+        if: inputs.sign_windows && inputs.build_windows
+        run: |
+          set -euo pipefail
+          dest="${RUNNER_TEMP}/windows-unsigned"
+          mkdir -p "$dest"
+          {
+            echo "### Unsigned Windows binaries"
+            echo "| Upload signed file to the draft as | SHA256 (unsigned) |"
+            echo "|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          yq -p json -o tsv '.[] | select(.type == "Binary" and .goos == "windows") | [.goarch, .path]' dist/artifacts.json |
+          while IFS=$'\t' read -r arch path; do
+            name="windows_${arch}-$(basename "$path")"
+            cp "$path" "${dest}/${name}"
+            sum="$(shasum -a 256 "${dest}/${name}" | awk '{print $1}')"
+            echo "| \`signed-${name}\` | \`${sum}\` |" >> "$GITHUB_STEP_SUMMARY"
+          done
+          ls -la "$dest"
+          [ -n "$(ls -A "$dest")" ] || { echo "::error::No Windows binaries found in dist/artifacts.json"; exit 1; }
+
+      - name: Upload unsigned Windows binaries
+        if: inputs.sign_windows && inputs.build_windows
+        uses: actions/upload-artifact@c7d193f32edcb7bfad88892161225aeda64e9392 # v4
+        with:
+          name: windows-unsigned
+          path: ${{ runner.temp }}/windows-unsigned
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload dist
+        uses: actions/upload-artifact@c7d193f32edcb7bfad88892161225aeda64e9392 # v4
+        with:
+          name: dist
+          path: dist
+          if-no-files-found: error
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  draft-release:
+    name: Draft GitHub release
+    needs: build
+    if: inputs.create_release
+    runs-on: ${{ inputs.linux_runner }}
+    permissions:
+      contents: write # gh release create/upload
+    outputs:
+      created: ${{ steps.create.outputs.created }}
+      release_url: ${{ steps.create.outputs.url }}
+    steps:
+      - name: Install Harden Runner
+        uses: checkmarx/harden-runner-action@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          use-policy-store: true
+          api-key: ${{ secrets.STEP_SECURITY_API_KEY }}
+
+      - name: Download dist
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Create draft release and upload assets
+        id: create
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          DEV: ${{ inputs.dev }}
+          HOLD_BACK_WINDOWS: ${{ inputs.sign_windows && inputs.build_windows }}
+          ASSET_GLOBS: ${{ inputs.release_asset_globs }}
+          TITLE_PREFIX: ${{ inputs.release_name_prefix != '' && inputs.release_name_prefix || github.event.repository.name }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::A release (possibly a draft) for '$TAG' already exists. Delete it or choose another tag."
+            exit 1
+          fi
+
+          held_back=()
+          if [ "$HOLD_BACK_WINDOWS" = "true" ]; then
+            # Windows archives + checksums are uploaded after signing by the windows-sign job.
+            mapfile -t held_back < <(jq -r '.[] | select((.type == "Archive" and .goos == "windows") or .type == "Checksum") | .name' dist/artifacts.json)
+          fi
+
+          assets=()
+          read -r -a globs <<< "$ASSET_GLOBS"
+          for g in "${globs[@]}"; do
+            for f in $g; do
+              skip=false
+              for h in "${held_back[@]}"; do [ "$(basename "$f")" = "$h" ] && skip=true; done
+              [ "$skip" = "true" ] || assets+=("$f")
+            done
+          done
+          [ "${#assets[@]}" -gt 0 ] || { echo "::error::No release assets matched: $ASSET_GLOBS"; exit 1; }
+          mapfile -t assets < <(printf '%s\n' "${assets[@]}" | sort -u)
+
+          args=("$TAG" "${assets[@]}" --target "$RELEASE_SHA" --title "${TITLE_PREFIX} ${TAG}" --generate-notes --draft)
+          [ "$DEV" = "true" ] && args+=(--prerelease)
+          gh release create "${args[@]}"
+          echo "created=true" >> "$GITHUB_OUTPUT"
+          url="$(gh release view "$TAG" --json url -q .url)"
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Draft release created: ${url}"
+            printf -- '- `%s`\n' "${assets[@]##*/}"
+            if [ "$HOLD_BACK_WINDOWS" = "true" ]; then
+              echo ""
+              echo "### ACTION REQUIRED: Windows signing"
+              echo "1. Download the \`windows-unsigned\` artifact from this run."
+              echo "2. Sign each \`.exe\` offline."
+              echo "3. Upload each signed file to the draft release above as \`signed-<same file name>\`."
+              echo "4. Approve the pending \`windows-signing\` deployment on this run."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  windows-sign:
+    name: Windows signing gate (human-in-the-loop)
+    needs: [build, draft-release]
+    if: inputs.sign_windows && inputs.build_windows
+    runs-on: ${{ inputs.linux_runner }}
+    environment:
+      name: ${{ inputs.windows_signing_environment }}
+      url: ${{ needs.draft-release.outputs.release_url }}
+    permissions:
+      contents: write # download/upload/delete draft release assets
+    steps:
+      - name: Install Harden Runner
+        uses: checkmarx/harden-runner-action@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          use-policy-store: true
+          api-key: ${{ secrets.STEP_SECURITY_API_KEY }}
+
+      - name: Download dist
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Install osslsigncode
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq osslsigncode zip unzip jq
+
+      - name: Fetch, verify and apply signed binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          SIGNER_SUBJECT: ${{ inputs.windows_signer_subject }}
+        run: |
+          set -euo pipefail
+          signed_dir="${RUNNER_TEMP}/signed"
+          mkdir -p "$signed_dir"
+          gh release download "$TAG" --pattern 'signed-*' --dir "$signed_dir" || true
+
+          mapfile -t binaries < <(jq -r '.[] | select(.type == "Binary" and .goos == "windows") | "\(.goarch)\t\(.path)"' dist/artifacts.json)
+          [ "${#binaries[@]}" -gt 0 ] || { echo "::error::No Windows binaries in artifacts.json"; exit 1; }
+
+          for entry in "${binaries[@]}"; do
+            arch="${entry%%$'\t'*}"
+            path="${entry#*$'\t'}"
+            base="$(basename "$path")"
+            signed="${signed_dir}/signed-windows_${arch}-${base}"
+            if [ ! -f "$signed" ]; then
+              echo "::error::Missing drop-off asset 'signed-windows_${arch}-${base}' on the draft release."
+              exit 1
+            fi
+
+            echo "Verifying $(basename "$signed")"
+            if ! report="$(osslsigncode verify -CAfile /etc/ssl/certs/ca-certificates.crt -in "$signed" 2>&1)"; then
+              echo "$report"
+              echo "::error::Authenticode verification failed for $(basename "$signed")"
+              exit 1
+            fi
+            if ! grep -i 'subject' <<< "$report" | grep -qiF -- "$SIGNER_SUBJECT"; then
+              echo "$report"
+              echo "::error::Signer subject does not contain '$SIGNER_SUBJECT'"
+              exit 1
+            fi
+            echo "sha256 signed: $(sha256sum "$signed" | awk '{print $1}')"
+            cp "$signed" "$path"
+
+            # Re-pack every Windows archive for this arch with the signed binary.
+            jq -r --arg arch "$arch" '.[] | select(.type == "Archive" and .goos == "windows" and .goarch == $arch) | .path' dist/artifacts.json |
+            while read -r zip; do
+              work="$(mktemp -d)"
+              unzip -q "$zip" -d "$work"
+              found="$(find "$work" -type f -name "$base" | wc -l)"
+              [ "$found" -ge 1 ] || { echo "::error::$base not found inside $zip"; exit 1; }
+              find "$work" -type f -name "$base" -exec cp "$signed" {} \;
+              rm -f "$zip"
+              (cd "$work" && zip -q -X -r "${GITHUB_WORKSPACE}/${zip}" .)
+              rm -rf "$work"
+              echo "Re-packed $zip"
+            done
+          done
+
+      - name: Regenerate checksums
+        run: |
+          set -euo pipefail
+          jq -r '.[] | select(.type == "Checksum") | .path' dist/artifacts.json |
+          while read -r sums; do
+            dir="$(dirname "$sums")"
+            names="$(awk '{print $2}' "$sums")"
+            tmp="$(mktemp)"
+            (cd "$dir" && for n in $names; do sha256sum "$n"; done) > "$tmp"
+            mv "$tmp" "$sums"
+            echo "Regenerated $sums"
+          done
+
+      - name: Upload signed archives and checksums, remove drop-off assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(jq -r '.[] | select((.type == "Archive" and .goos == "windows") or .type == "Checksum") | .path' dist/artifacts.json)
+          gh release upload "$TAG" "${files[@]}" --clobber
+          gh release view "$TAG" --json assets -q '.assets[].name' | { grep '^signed-' || true; } |
+          while read -r asset; do
+            gh release delete-asset "$TAG" "$asset" --yes
+          done
+          echo "Windows binaries signed and uploaded." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload dist-final
+        uses: actions/upload-artifact@c7d193f32edcb7bfad88892161225aeda64e9392 # v4
+        with:
+          name: dist-final
+          path: dist
+          if-no-files-found: error
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Docker image
+    needs: [build, draft-release, windows-sign]
+    if: >-
+      !cancelled() && inputs.create_docker &&
+      needs.build.result == 'success' &&
+      contains(fromJSON('["success","skipped"]'), needs.draft-release.result) &&
+      contains(fromJSON('["success","skipped"]'), needs.windows-sign.result)
+    runs-on: ${{ inputs.linux_runner }}
+    permissions:
+      contents: read
+      id-token: write # Docker Hub OIDC + AWS OIDC (Cosign keys)
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - name: Install Harden Runner
+        uses: checkmarx/harden-runner-action@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          use-policy-store: true
+          api-key: ${{ secrets.STEP_SECURITY_API_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v6
+        with:
+          persist-credentials: false
+
+      - name: Download dist
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Configure AWS Credentials for Secrets Manager
+        if: inputs.sign_docker
+        uses: step-security/configure-aws-credentials@169c21e4c75dca522fb69a37bfdb5d8d634b9da4 # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.SECRET_MANAGER_ROLE_ARN }}
+          aws-region: ${{ secrets.SECRET_MANAGER_AWS_REGION }}
+          role-session-name: release-cosign-secrets
+
+      - name: Fetch Cosign keys from AWS Secrets Manager
+        if: inputs.sign_docker
+        uses: step-security/aws-secretsmanager-get-secrets@102b6b2a2528747bcc321bb99ef326d8be7ef58f # v3.0.1
+        with:
+          secret-ids: |
+            COSIGN_PRIVATE_KEY,cosign/private_key
+            COSIGN_PUBLIC_KEY,cosign/public_key
+            COSIGN_PASSWORD,cosign/password
+
+      - name: Validate Cosign keys
+        if: inputs.sign_docker
+        run: |
+          set -euo pipefail
+          tmp_key="$(mktemp)"; tmp_pub="$(mktemp)"
+          trap 'rm -f "${tmp_key}" "${tmp_pub}"' EXIT
+          printf '%s' "${COSIGN_PRIVATE_KEY}" > "${tmp_key}"
+          printf '%s' "${COSIGN_PUBLIC_KEY}"  > "${tmp_pub}"
+          grep -q "BEGIN ENCRYPTED SIGSTORE PRIVATE KEY" "${tmp_key}" \
+            || { echo "ERROR: COSIGN_PRIVATE_KEY is not a Sigstore private key PEM"; exit 1; }
+          grep -q "BEGIN PUBLIC KEY" "${tmp_pub}" \
+            || { echo "ERROR: COSIGN_PUBLIC_KEY is not a public key PEM"; exit 1; }
+          [ "$(wc -l < "${tmp_key}")" -ge 2 ] \
+            || { echo "ERROR: COSIGN_PRIVATE_KEY has no line breaks after decoding"; exit 1; }
+          [ "$(wc -l < "${tmp_pub}")" -ge 2 ] \
+            || { echo "ERROR: COSIGN_PUBLIC_KEY has no line breaks after decoding"; exit 1; }
+          echo "Cosign keys look structurally valid."
+
+      - name: Install Cosign
+        if: inputs.sign_docker
+        uses: step-security/cosign-installer@8c02650536457a1c912424ab6cb9734aa3eceb56 # v4.1.1
+
+      - name: Build Docker image
+        env:
+          TAG: ${{ inputs.tag }}
+          IMAGE: ${{ inputs.docker_image }}
+          DOCKERFILE: ${{ inputs.dockerfile }}
+          BIN_PATH: ${{ inputs.docker_binary_path }}
+          BIN_NAME: ${{ inputs.docker_binary_name }}
+          TAG_LATEST: ${{ inputs.docker_tag_latest }}
+        run: |
+          set -euo pipefail
+          [ -f "$BIN_PATH" ] || { echo "::error::Docker binary '$BIN_PATH' not found in dist"; exit 1; }
+          build_dir="$(mktemp -d)"
+          cp "$DOCKERFILE" "${build_dir}/Dockerfile"
+          cp "$BIN_PATH" "${build_dir}/${BIN_NAME}"
+          chmod +x "${build_dir}/${BIN_NAME}" # artifacts do not preserve the exec bit
+          tags=(-t "${IMAGE}:${TAG}")
+          [ "$TAG_LATEST" = "true" ] && tags+=(-t "${IMAGE}:latest")
+          docker build "${build_dir}" "${tags[@]}"
+
+      - name: Login to Docker Hub
+        if: inputs.publish_docker
+        uses: step-security/docker-login-action@bd6978fd4ef9a5f78130095b298b8a721afcb0d8 # v4.5.1
+        with:
+          username: ${{ inputs.dockerhub_username }}
+        env:
+          DOCKERHUB_OIDC_CONNECTIONID: ${{ secrets.DOCKERHUB_OIDC_CONNECTIONID }}
+
+      - name: Push Docker image
+        id: push
+        if: inputs.publish_docker
+        env:
+          TAG: ${{ inputs.tag }}
+          IMAGE: ${{ inputs.docker_image }}
+          TAG_LATEST: ${{ inputs.docker_tag_latest }}
+        run: |
+          set -euo pipefail
+          docker push "${IMAGE}:${TAG}"
+          if [ "$TAG_LATEST" = "true" ]; then docker push "${IMAGE}:latest"; fi
+          ref="$(docker inspect --format '{{index .RepoDigests 0}}' "${IMAGE}:${TAG}")"
+          digest="${ref#*@}"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          echo "Pushed \`${IMAGE}:${TAG}\` (\`${digest}\`)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Sign and verify Docker image with Cosign
+        if: inputs.sign_docker
+        env:
+          IMAGE: ${{ inputs.docker_image }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes --key env://COSIGN_PRIVATE_KEY "${IMAGE}@${DIGEST}"
+          pub="$(mktemp)"; trap 'rm -f "$pub"' EXIT
+          printf '%s' "${COSIGN_PUBLIC_KEY}" > "$pub"
+          cosign verify --key "$pub" "${IMAGE}@${DIGEST}" > /dev/null
+          echo "Signed and verified \`${IMAGE}@${DIGEST}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  s3-upload:
+    name: Upload to S3
+    needs: [build, draft-release, windows-sign]
+    if: >-
+      !cancelled() && inputs.upload_s3 &&
+      needs.build.result == 'success' &&
+      contains(fromJSON('["success","skipped"]'), needs.draft-release.result) &&
+      contains(fromJSON('["success","skipped"]'), needs.windows-sign.result)
+    runs-on: ${{ inputs.linux_runner }}
+    permissions:
+      contents: read
+      id-token: write # AWS OIDC
+    steps:
+      - name: Install Harden Runner
+        uses: checkmarx/harden-runner-action@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          use-policy-store: true
+          api-key: ${{ secrets.STEP_SECURITY_API_KEY }}
+
+      - name: Download dist
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ needs.windows-sign.result == 'success' && 'dist-final' || 'dist' }}
+          path: dist
+
+      - name: Configure AWS Credentials
+        uses: step-security/configure-aws-credentials@169c21e4c75dca522fb69a37bfdb5d8d634b9da4 # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_ASSUME_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_ASSUME_ROLE_REGION }}
+
+      - name: Upload archives
+        env:
+          BUCKET: ${{ secrets.S3_BUCKET_NAME }}
+          PREFIX: ${{ inputs.s3_prefix }}
+          TAG: ${{ inputs.tag }}
+          VERSIONED_IDS: ${{ inputs.s3_versioned_archive_ids }}
+          LATEST_IDS: ${{ inputs.s3_latest_archive_ids }}
+        run: |
+          set -euo pipefail
+          [ -n "$BUCKET" ] || { echo "::error::S3_BUCKET_NAME secret is not set"; exit 1; }
+
+          upload_ids() { # <comma-separated ids> <s3 folder>
+            local ids="$1" folder="$2" id name
+            local -a id_list names
+            IFS=',' read -r -a id_list <<< "$ids"
+            for id in "${id_list[@]}"; do
+              id="$(echo "$id" | xargs)"
+              [ -n "$id" ] || continue
+              mapfile -t names < <(jq -r --arg id "$id" '.[] | select(.type == "Archive" and .extra.ID == $id) | .path' dist/artifacts.json)
+              if [ "${#names[@]}" -eq 0 ]; then
+                echo "::warning::No archives for id '$id' (platform not built?)"
+                continue
+              fi
+              for name in "${names[@]}"; do
+                aws s3 cp "$name" "s3://${BUCKET}/${folder}/$(basename "$name")" --only-show-errors
+                echo "- \`${folder}/$(basename "$name")\`" >> "$GITHUB_STEP_SUMMARY"
+              done
+            done
+          }
+
+          echo "### S3 uploads" >> "$GITHUB_STEP_SUMMARY"
+          upload_ids "$VERSIONED_IDS" "${PREFIX}/${TAG}"
+          jq -r '.[] | select(.type == "Checksum") | .path' dist/artifacts.json |
+          while read -r sums; do
+            aws s3 cp "$sums" "s3://${BUCKET}/${PREFIX}/${TAG}/$(basename "$sums")" --only-show-errors
+            echo "- \`${PREFIX}/${TAG}/$(basename "$sums")\`" >> "$GITHUB_STEP_SUMMARY"
+          done
+          if [ -n "$LATEST_IDS" ]; then
+            upload_ids "$LATEST_IDS" "${PREFIX}/latest"
+          fi
+
+  # ---------------------------------------------------------------------------
+  publish-release:
+    name: Publish GitHub release
+    needs: [build, draft-release, windows-sign, docker, s3-upload]
+    if: >-
+      !cancelled() && inputs.publish_release &&
+      needs.draft-release.result == 'success' &&
+      contains(fromJSON('["success","skipped"]'), needs.windows-sign.result) &&
+      contains(fromJSON('["success","skipped"]'), needs.docker.result) &&
+      contains(fromJSON('["success","skipped"]'), needs.s3-upload.result)
+    runs-on: ${{ inputs.linux_runner }}
+    permissions:
+      contents: write # gh release edit
+    steps:
+      - name: Install Harden Runner
+        uses: checkmarx/harden-runner-action@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          use-policy-store: true
+          api-key: ${{ secrets.STEP_SECURITY_API_KEY }}
+
+      - name: Download dist
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ needs.windows-sign.result == 'success' && 'dist-final' || 'dist' }}
+          path: dist
+
+      - name: Verify assets and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          DEV: ${{ inputs.dev }}
+          ASSET_GLOBS: ${{ inputs.release_asset_globs }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          mapfile -t uploaded < <(gh release view "$TAG" --json assets -q '.assets[].name')
+
+          if printf '%s\n' "${uploaded[@]}" | grep -q '^signed-'; then
+            echo "::error::signed-* drop-off assets are still attached to the draft."
+            exit 1
+          fi
+
+          missing=()
+          read -r -a globs <<< "$ASSET_GLOBS"
+          for g in "${globs[@]}"; do
+            for f in $g; do
+              name="$(basename "$f")"
+              printf '%s\n' "${uploaded[@]}" | grep -qxF -- "$name" || missing+=("$name")
+            done
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '::error::Asset missing from draft: %s\n' "${missing[@]}"
+            exit 1
+          fi
+
+          args=("$TAG" --draft=false)
+          [ "$DEV" = "true" ] && args+=(--prerelease)
+          gh release edit "${args[@]}"
+          echo "Published: $(gh release view "$TAG" --json url -q .url)" >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  homebrew:
+    name: Update Homebrew tap
+    needs: [publish-release, windows-sign]
+    if: >-
+      !cancelled() && inputs.update_homebrew &&
+      needs.publish-release.result == 'success'
+    runs-on: ${{ inputs.linux_runner }}
+    permissions:
+      contents: read
+    steps:
+      - name: Install Harden Runner
+        uses: checkmarx/harden-runner-action@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          use-policy-store: true
+          api-key: ${{ secrets.STEP_SECURITY_API_KEY }}
+
+      - name: Checkout (formula template)
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v6
+        with:
+          persist-credentials: false
+
+      - name: Download dist
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ needs.windows-sign.result == 'success' && 'dist-final' || 'dist' }}
+          path: dist
+
+      - name: Render and commit formula
+        env:
+          GH_TOKEN: ${{ secrets.GO_BOT_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          TAP: ${{ inputs.homebrew_tap_repo }}
+          TEMPLATE: ${{ inputs.homebrew_formula_template }}
+          FORMULA_PATH: ${{ inputs.homebrew_formula_path }}
+          ARCHIVE_IDS: ${{ inputs.homebrew_archive_ids }}
+        run: |
+          set -euo pipefail
+          [ -n "$GH_TOKEN" ] || { echo "::error::GO_BOT_TOKEN secret is not set"; exit 1; }
+          [ -f "$TEMPLATE" ] || { echo "::error::Formula template '$TEMPLATE' not found"; exit 1; }
+
+          export VERSION="${TAG#v}" TAG
+          export RELEASE_URL="https://github.com/${REPO}/releases/tag/${TAG}"
+          vars='$VERSION $TAG $RELEASE_URL'
+          IFS=',' read -r -a ids <<< "$ARCHIVE_IDS"
+          for id in "${ids[@]}"; do
+            id="$(echo "$id" | xargs)"
+            while IFS=$'\t' read -r goos goarch path; do
+              key="$(echo "${goos}_${goarch}" | tr '[:lower:]-' '[:upper:]_')"
+              export "SHA256_${key}=$(sha256sum "$path" | awk '{print $1}')"
+              export "URL_${key}=https://github.com/${REPO}/releases/download/${TAG}/$(basename "$path")"
+              vars="${vars} \$SHA256_${key} \$URL_${key}"
+            done < <(jq -r --arg id "$id" '.[] | select(.type == "Archive" and .extra.ID == $id) | "\(.goos)\t\(.goarch)\t\(.path)"' dist/artifacts.json)
+          done
+
+          rendered="$(mktemp)"
+          envsubst "$vars" < "$TEMPLATE" > "$rendered"
+          cat "$rendered"
+
+          sha="$(gh api "repos/${TAP}/contents/${FORMULA_PATH}" -q .sha 2>/dev/null || true)"
+          args=(-X PUT "repos/${TAP}/contents/${FORMULA_PATH}"
+                -f message="Update formula to ${TAG}"
+                -f content="$(base64 -w0 "$rendered")")
+          [ -n "$sha" ] && args+=(-f sha="$sha")
+          gh api "${args[@]}" > /dev/null
+          echo "Homebrew formula \`${TAP}/${FORMULA_PATH}\` updated to ${TAG}" >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  notify:
+    name: Notify Teams & JIRA
+    needs: publish-release
+    if: inputs.notify && needs.publish-release.result == 'success'
+    permissions:
+      contents: read
+    # TODO: verify this SHA contains release-notify.yml (the ast-cli reference used @main).
+    uses: Checkmarx/plugins-release-workflow/.github/workflows/release-notify.yml@d0ad5e1c4cf1edacf4d91c250c2b7a4a5478baab # main
+    with:
+      product_name: ${{ inputs.product_name }}
+      release_version: ${{ inputs.tag }}
+      cli_release_version: ""
+      release_author: ${{ inputs.release_author }}
+      release_url: https://github.com/${{ github.repository }}/releases/tag/${{ inputs.tag }}
+      jira_product_name: ${{ inputs.jira_product_name }}
+    # Trusted first-party Checkmarx org workflow.
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+
+  dispatch:
+    name: Dispatch new version to plugins
+    needs: publish-release
+    if: inputs.dispatch_plugins && needs.publish-release.result == 'success'
+    permissions:
+      contents: read # dispatch-workflow.yml declares `permissions: contents: read`
+    uses: Checkmarx/plugins-release-workflow/.github/workflows/dispatch-workflow.yml@d0ad5e1c4cf1edacf4d91c250c2b7a4a5478baab # main
+    with:
+      cli_version: ${{ inputs.tag }}
+    # Trusted first-party Checkmarx org workflow.
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+
+  # ---------------------------------------------------------------------------
+  cleanup:
+    name: Cleanup draft release on failure
+    needs: [build, draft-release, windows-sign, docker, s3-upload, publish-release]
+    if: >-
+      always() && inputs.create_release &&
+      needs.draft-release.outputs.created == 'true' &&
+      (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
+    runs-on: ${{ inputs.linux_runner }}
+    permissions:
+      contents: write # gh release delete
+    steps:
+      - name: Install Harden Runner
+        uses: checkmarx/harden-runner-action@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          use-policy-store: true
+          api-key: ${{ secrets.STEP_SECURITY_API_KEY }}
+
+      - name: Delete draft release (never a published one)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          is_draft="$(gh release view "$TAG" --json isDraft -q .isDraft 2>/dev/null || echo "missing")"
+          if [ "$is_draft" = "true" ]; then
+            gh release delete "$TAG" --cleanup-tag --yes
+            echo "Deleted draft release ${TAG}." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Release ${TAG} is '${is_draft}' (not a draft); nothing to delete." >> "$GITHUB_STEP_SUMMARY"
+          fi
