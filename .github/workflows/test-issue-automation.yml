@@ -10,7 +10,7 @@ permissions:
 jobs:
   notify_jira:
     name: Notify Jira
-    uses: ./.github/workflows/jira_notify.yml
+    uses: $/.github/workflows/jira_notify.yml
     with:
       title: ${{ github.event.issue.title }}
       body: ${{ github.event.issue.body }}
